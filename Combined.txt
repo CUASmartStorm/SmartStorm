@@ -1,0 +1,720 @@
+Add comments to the code describing what each part does.
+Do not change any of the functional code.
+Keep the Comments with the dashes, since they separate individual files in the program.
+
+
+
+
+/////////////////////////////////////////////////////////////
+
+#include "smartrainharvest.h"
+
+#include <QApplication>
+
+int main(int argc, char *argv[])
+{
+    QApplication a(argc, argv);
+    SmartRainHarvest w;
+    w.showMaximized();
+    return a.exec();
+}
+
+
+
+/////////////////////////////////////////////////////////////
+
+
+#include "chartcontainer.h"
+
+using namespace QtCharts;
+
+ChartContainer::ChartContainer()
+{
+    for (int i=0; i<10; i++)
+        colors.append(QColor(rand()%256,rand()%256,rand()%256));
+}
+
+void ChartContainer::plotWeatherData(const QVector<WeatherData>& weatherData, const QString& yAxisTitle) {
+        // Create a line series
+        chart->removeAllSeries();
+        removeAllAxes();
+        QLineSeries* series = new QLineSeries();
+        double max_val = -1e6;
+        for (const auto& data : weatherData) {
+            series->append(data.timestamp.toMSecsSinceEpoch(), data.value);
+            max_val = std::max(data.value,max_val);
+        }
+
+        QPen pen = series->pen();
+        pen.setWidth(4); // Set the desired line thickness
+        pen.setColor(colors[0]);
+        series->setPen(pen);
+
+        // Create the chart
+        chart->addSeries(series);
+        chart->setTitle(yAxisTitle);
+        chart->setAnimationOptions(QChart::SeriesAnimations);
+
+        // Customize axes
+        QDateTimeAxis* axisX = new QDateTimeAxis();
+        axisX->setTitleText("Time");
+        axisX->setFormat("dd/MM HH:mm");
+        QFont xAxisFont = axisX->labelsFont();
+        xAxisFont.setPointSize(8); // Make font smaller
+        axisX->setLabelsFont(xAxisFont);
+        axisX->setTickCount(20);
+        axisX->setLabelsAngle(90.0); // Rotate labels by 90 degrees
+        chart->addAxis(axisX, Qt::AlignBottom);
+        series->attachAxis(axisX);
+
+        QValueAxis* axisY = new QValueAxis();
+        axisY->setTitleText(yAxisTitle);
+        axisY->setLabelFormat("%.1f");
+        QFont yAxisFont = axisY->labelsFont();
+        axisY->setRange(0,max_val);
+        yAxisFont.setPointSize(8); // Make font smaller
+        axisY->setLabelsFont(yAxisFont);
+        chart->addAxis(axisY, Qt::AlignLeft);
+        series->attachAxis(axisY);
+
+        chartview->setChart(chart);
+        chartview->setRenderHint(QPainter::Antialiasing);
+
+}
+
+void ChartContainer::plotWeatherDataMap(const QMap<QString, QVector<WeatherData>>& weatherDataMap) {
+        // Create the chart
+        chart->removeAllSeries();
+        removeAllAxes();
+        //chart->setTitle("Weather Data");
+        chart->setAnimationOptions(QChart::SeriesAnimations);
+
+        // Find the range of the x-axis based on the longest timeseries
+        QDateTime minTime = QDateTime::currentDateTime();
+        QDateTime maxTime = QDateTime::fromSecsSinceEpoch(0);
+
+        for (auto it = weatherDataMap.begin(); it != weatherDataMap.end(); ++it) {
+            const QVector<WeatherData>& weatherData = it.value();
+            if (!weatherData.empty()) {
+                QDateTime seriesStartTime = weatherData.front().timestamp;
+                QDateTime seriesEndTime = weatherData.back().timestamp;
+
+                if (seriesStartTime < minTime) {
+                    minTime = seriesStartTime;
+                }
+                if (seriesEndTime > maxTime) {
+                    maxTime = seriesEndTime;
+                }
+            }
+        }
+
+        // Customize the X-axis (shared across all series)
+        QDateTimeAxis* axisX = new QDateTimeAxis();
+        axisX->setTitleText("Time");
+        axisX->setFormat("dd/MM HH:mm");
+        axisX->setTickCount(10);
+        QFont xAxisFont = axisX->labelsFont();
+        xAxisFont.setPointSize(8); // Make font smaller
+        axisX->setLabelsFont(xAxisFont);
+        axisX->setLabelsAngle(90.0); // Rotate labels by 90 degrees
+        axisX->setRange(minTime,maxTime);
+        chart->addAxis(axisX, Qt::AlignBottom);
+
+        // Add series for each key in the map
+        int counter = 0;
+        for (auto it = weatherDataMap.begin(); it != weatherDataMap.end(); ++it) {
+            counter++;
+            const QString& yAxisTitle = it.key();
+            const QVector<WeatherData>& weatherData = it.value();
+
+            // Create a line series
+            QLineSeries* series = new QLineSeries();
+            series->setName(yAxisTitle);
+
+            for (const auto& data : weatherData) {
+                series->append(data.timestamp.toMSecsSinceEpoch(), data.value);
+            }
+
+            QPen pen = series->pen();
+            pen.setWidth(4); // Set the desired line thickness
+            pen.setColor(colors[counter]);
+            series->setPen(pen);
+
+            // Add the series to the chart
+            chart->addSeries(series);
+            series->attachAxis(axisX);
+
+            // Create and attach a Y-axis for this series
+            QValueAxis* axisY = new QValueAxis();
+            axisY->setTitleText(yAxisTitle);
+            QFont yAxisFont = axisY->labelsFont();
+            yAxisFont.setPointSize(8); // Make font smaller
+            axisY->setLabelsFont(yAxisFont);
+            axisY->setLabelFormat("%.1f");
+            chart->addAxis(axisY, Qt::AlignLeft);
+            series->attachAxis(axisY);
+        }
+
+        QFont titleFont = chart->titleFont();
+        titleFont.setPointSize(10); // Make font smaller
+        chart->setTitleFont(titleFont);
+        chartview->setChart(chart);
+        chartview->setRenderHint(QPainter::Antialiasing);
+
+}
+
+void ChartContainer::removeAllAxes() {
+    // Get a list of all axes associated with the chart
+    QList<QAbstractAxis*> axes = chart->axes();
+
+    // Loop through each axis and remove it
+    for (QAbstractAxis* axis : axes) {
+        chart->removeAxis(axis);
+    }
+}
+
+
+/////////////////////////////////////////////////////////////
+
+
+#ifndef CHARTCONTAINER_H
+#define CHARTCONTAINER_H
+#include <QtCharts/QChartView>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QValueAxis>
+#include <QtCharts/QDateTimeAxis>
+#include <QMap>
+
+#include "noaaweatherfetcher.h"
+
+
+class ChartContainer
+{
+public:
+    ChartContainer();
+    void plotWeatherData(const QVector<WeatherData>& weatherData, const QString& yAxisTitle);
+    void plotWeatherDataMap(const QMap<QString, QVector<WeatherData>>& weatherDataMap);
+    QtCharts::QChartView *GetChartView() {return chartview;}
+private:
+    QtCharts::QChart *chart = new QtCharts::QChart();
+    QtCharts::QChartView *chartview = new QtCharts::QChartView();
+    void removeAllAxes();
+    QVector<QColor> colors;
+};
+
+#endif // CHARTCONTAINER_H
+
+
+
+/////////////////////////////////////////////////////////////
+
+#include "DistanceSensor.h"
+#include <cmath>
+
+DistanceSensor::DistanceSensor() {
+    // Constructor
+}
+
+DistanceSensor::~DistanceSensor() {
+    cleanup();
+}
+
+bool DistanceSensor::initialize() {
+#ifdef RasPi
+    wiringPiSetupGpio(); // Use BCM pin numbering
+    pinMode(4, OUTPUT);
+    pinMode(17, INPUT);
+#endif
+    return true;
+}
+
+void DistanceSensor::cleanup() {
+    // Cleanup resources if needed
+}
+
+double DistanceSensor::getDistance() {
+    // Clear the TRIG_PIN
+#ifdef RasPi
+    digitalWrite(4, LOW);
+    QThread::sleep(2); // Wait for 2 seconds
+
+    // Send a trigger pulse
+    digitalWrite(4, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(4, LOW);
+
+    // Wait for ECHO_PIN to go HIGH
+    while (digitalRead(17) == LOW);
+    long pulseStart = micros();
+
+    // Wait for ECHO_PIN to go LOW
+    while (digitalRead(17) == HIGH);
+    long pulseEnd = micros();
+
+    // Calculate the distance
+    double pulseDuration = pulseEnd - pulseStart;
+    double distance = pulseDuration * 0.01715; // Distance in cm
+
+    return std::round(distance * 100.0) / 100.0; // Round to 2 decimal places
+#endif
+
+    return rand()%100;
+}
+
+
+
+/////////////////////////////////////////////////////////////
+
+
+#ifndef DISTANCESENSOR_H
+#define DISTANCESENSOR_H
+
+#include <QObject>
+#include <QDebug>
+#include <QThread>
+#ifdef RasPi
+#include <wiringPi.h>
+#endif
+
+class DistanceSensor : public QObject {
+    Q_OBJECT
+
+public:
+    DistanceSensor();
+    ~DistanceSensor();
+
+    bool initialize();
+    void cleanup();
+    double getDistance();
+
+private:
+    const int TRIG_PIN = 4; // BCM pin 4
+    const int ECHO_PIN = 17; // BCM pin 17
+
+
+
+};
+
+#endif // DISTANCESENSOR_H
+
+
+/////////////////////////////////////////////////////////////
+
+
+#include "noaaweatherfetcher.h"
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkRequest>
+#include <QJsonDocument>
+#include <QEventLoop>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDateTime>
+#include <vector>
+#include <iostream>
+
+
+NOAAWeatherFetcher::NOAAWeatherFetcher(QObject* parent) : QObject(parent) {
+    manager = new QNetworkAccessManager(this);
+}
+
+QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(int latitude, int longitude, datatype type) {
+    QVector<WeatherData> weatherData;
+
+    // Construct NOAA API URL
+    QString url;
+
+    url = QString("https://api.weather.gov/gridpoints/LWX/%1,%2").arg(latitude).arg(longitude);
+    qDebug()<<url;
+    // Make the request
+    QNetworkRequest request((QUrl(url)));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QString DataType;
+    switch (type) {
+        case datatype::PrecipitationAmount:
+            DataType = "quantitativePrecipitation";
+            break;
+        case datatype::ProbabilityofPrecipitation:
+            DataType = "probabilityOfPrecipitation";
+            break;
+        case datatype::RelativeHumidity:
+            DataType = "relativeHumidity";
+            break;
+        case datatype::Temperature:
+            DataType = "temperature";
+            break;
+    }
+    qDebug()<<DataType;
+    QNetworkReply* reply = manager->get(request);
+
+    // Wait for the reply to finish (blocking approach for simplicity)
+    QEventLoop loop;
+
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() == QNetworkReply::NoError) {
+        QByteArray response = reply->readAll();
+        QJsonDocument jsonResponse = QJsonDocument::fromJson(response);
+        QJsonObject jsonObject = jsonResponse.object();
+        QJsonObject properties = jsonObject["properties"].toObject();
+        //qDebug()<<properties;
+        qDebug()<<properties[DataType];
+        QJsonArray periods = properties[DataType].toObject()["values"].toArray();
+        qDebug()<<periods;
+        for (const auto& period : periods) {
+            QJsonObject obj = period.toObject();
+
+            // Extract time and value (temperature or any other parameter)
+            qDebug()<<obj["validTime"].toString().split("+")[0];
+            QDateTime time = QDateTime::fromString(obj["validTime"].toString().split("+")[0], "yyyy-MM-ddTHH:mm:ss");
+            qDebug()<<time;
+            double value = obj["value"].toDouble();
+
+            weatherData.push_back({time, value});
+        }
+    } else {
+        qWarning() << "Error fetching weather data:" << reply->errorString();
+    }
+
+    reply->deleteLater();
+    return weatherData;
+}
+
+double calculateCumulativeValue(const QVector<WeatherData>& weatherData, int days) {
+    if (weatherData.isEmpty()) return 0.0;
+
+    QDateTime startTime = weatherData.first().timestamp;
+    QDateTime endTime = startTime.addDays(days);
+
+    double cumulativeValue = 0.0;
+    for (const auto& data : weatherData) {
+        if (data.timestamp <= endTime) {
+            cumulativeValue += data.value;
+        } else {
+            break;
+        }
+    }
+
+    return cumulativeValue;
+}
+
+
+
+/////////////////////////////////////////////////////////////
+
+
+#ifndef NOAAWEATHERFETCHER_H
+#define NOAAWEATHERFETCHER_H
+
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkRequest>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QDateTime>
+#include <vector>
+#include <iostream>
+
+enum class datatype {ProbabilityofPrecipitation, Temperature, PrecipitationAmount, RelativeHumidity};
+
+// Struct to hold the weather prediction data
+struct WeatherData {
+    QDateTime timestamp;
+    double value;
+};
+
+class QChartView;
+
+class NOAAWeatherFetcher : public QObject {
+    Q_OBJECT
+
+public:
+    NOAAWeatherFetcher(QObject* parent = nullptr);
+    QVector<WeatherData> getWeatherPrediction(int latitude, int longitude, datatype type);
+
+
+
+private:
+    QNetworkAccessManager* manager;
+};
+
+double calculateCumulativeValue(const QVector<WeatherData>& weatherData, int days);
+
+
+
+
+#endif // NOAAWEATHERFETCHER_H
+
+
+/////////////////////////////////////////////////////////////
+
+
+#include "smartrainharvest.h"
+#include "ui_smartrainharvest.h"
+#include "noaaweatherfetcher.h"
+#include "chartcontainer.h"
+#include <QMap>
+#include <QTimer>
+#include <DistanceSensor.h>
+#include <QSplitter>
+#include <QLabel>
+#include <QPushButton>
+#include <wiringPi.h>
+
+//QT_CHARTS_USE_NAMESPACE
+
+SmartRainHarvest::SmartRainHarvest(QWidget *parent)
+    : QMainWindow(parent)
+    , ui(new Ui::SmartRainHarvest)
+{
+    ui->setupUi(this);
+
+
+    //Latitude 38.9072° N
+    //Longitude: 77.0369 W
+
+    QSplitter *splitter = new QSplitter(Qt::Vertical, this);
+
+
+
+
+    QTimer *CheckWeatherTimer = new QTimer();
+
+
+    connect(CheckWeatherTimer,SIGNAL(timeout()), this, SLOT(on_Check_Timer()));
+    connect(ReleaseTimer,SIGNAL(timeout()), this, SLOT(on_Check_Distance()));
+
+    CheckWeatherTimer->start(Check_Weather_Interval*1000);
+
+
+    splitter->addWidget(ProbnQuanChartContainer->GetChartView());
+    QSplitter *hsplitter = new QSplitter(Qt::Horizontal, splitter);
+    hsplitter->addWidget(CummulativeForcastChartContainer->GetChartView());
+    hsplitter->addWidget(WaterDepthChartContainer->GetChartView());
+    splitter->addWidget(OpenShutChartContainer->GetChartView());
+
+    QWidget* layoutWidget1 = new QWidget(hsplitter);
+    QVBoxLayout *buttonslayout = new QVBoxLayout(layoutWidget1);
+    ManualOpenShut = new QPushButton(splitter);
+    buttonslayout->addWidget(ManualOpenShut);
+    ManualOpenShut->setText("Open Valve");
+    DistanceLbl = new QLabel(splitter);
+    buttonslayout->addWidget(DistanceLbl);
+    connect(ManualOpenShut, SIGNAL(clicked()),this, SLOT(on_ManualOpenShut()) );
+    splitter->setStretchFactor(0, 1);
+    splitter->setStretchFactor(1, 1);
+    splitter->setStretchFactor(2, 1);
+    hsplitter->setStretchFactor(0, 3);
+    hsplitter->setStretchFactor(1, 3);
+    hsplitter->setStretchFactor(2, 1);
+
+
+    setCentralWidget(splitter);
+    distancesensor.initialize();
+    pinMode(18, OUTPUT);
+    on_Check_Timer();
+
+}
+
+SmartRainHarvest::~SmartRainHarvest()
+{
+    delete ui;
+}
+
+void SmartRainHarvest::on_Check_Timer()
+{
+
+    qDebug()<<"Checking weather!";
+    QMap<QString, QVector<WeatherData>> precip_data;
+
+    QVector<WeatherData> rainamountdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::PrecipitationAmount);
+    precip_data["Precipitation [mm]"] = rainamountdata;
+
+    QVector<WeatherData> rainprobdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::ProbabilityofPrecipitation);
+    precip_data["Precipitation probability (%)"] = rainprobdata;
+
+    QVector<WeatherData> tempdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::Temperature);
+    precip_data["Temperature (<sup>o</sup>C)"] = tempdata;
+
+    ProbnQuanChartContainer->plotWeatherDataMap(precip_data);
+    ProbnQuanChartContainer->GetChartView()->setRenderHint(QPainter::Antialiasing);
+
+    if (cummulativerain.count()>30) cummulativerain.removeFirst();
+
+    cummulativerain.append({QDateTime::currentDateTime(),calculateCumulativeValue(rainamountdata,2) });
+    CummulativeForcastChartContainer->plotWeatherData(cummulativerain,"Cummulative rain forecast [mm]");
+
+    double distance;
+    if (checkdistance)
+    {   distance = distancesensor.getDistance();
+        qDebug()<<"Distance = " << distance << " cm";
+        DistanceLbl->setText(QString::number(distance));
+        if (depth.count()>30) depth.removeFirst();
+        depth.append({QDateTime::currentDateTime(), max_distance - distance});
+        WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
+
+        if (depth.last().value>waterdepthcriteria && cummulativerain.last().value>cummulativeraincriteria)
+        {
+            overflow = false;
+            StartRelease();
+        }
+
+        if (depth.last().value>bypassdepthcriteria)
+        {
+            overflow = true;
+            StartRelease();
+        }
+    }
+
+    if (openshut.count()>100) openshut.removeFirst();
+    openshut.append({QDateTime::currentDateTime(), double(int(state))});
+    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off)");
+    if (!state)
+        ManualOpenShut->setText("Open the Valve");
+    else
+        ManualOpenShut->setText("Shut the Valve");
+
+}
+
+void SmartRainHarvest::StartRelease()
+{
+    ReleaseTimer->start(10000);
+}
+
+void SmartRainHarvest::on_Check_Distance()
+{
+    double distance = distancesensor.getDistance();
+    if (depth.count()>30) depth.removeFirst();
+    depth.append({QDateTime::currentDateTime(), max_distance - distance});
+    WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
+
+
+
+    if (openshut.count()>100) openshut.removeFirst();
+    openshut.append({QDateTime::currentDateTime(), double(state)});
+    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off");
+
+    if (depth.last().value<(overflow?depthtoreleaseto:minumumdepth))
+    {
+        ReleaseTimer->stop();
+        ShutTheValve();
+        state = false;
+    }
+    else
+    {
+        OpenTheValve();
+        state=true;
+    }
+}
+
+void SmartRainHarvest::OpenTheValve(){
+
+    digitalWrite(18, HIGH);
+    qDebug()<<"The valve is now open";
+}
+
+void SmartRainHarvest::ShutTheValve(){
+
+    digitalWrite(18, LOW);
+    qDebug()<<"The valve is now shut";
+}
+
+void SmartRainHarvest::on_ManualOpenShut()
+{
+    if (state)
+    {
+        ShutTheValve();
+        state = false;
+    }
+    else
+    {
+        OpenTheValve();
+        state = true;
+    }
+    if (!state)
+        ManualOpenShut->setText("Open the Valve");
+    else
+        ManualOpenShut->setText("Shut the Valve");
+
+    if (openshut.count()>100) openshut.removeFirst();
+    openshut.append({QDateTime::currentDateTime(), double(int(state))});
+    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off)");
+}
+
+
+
+/////////////////////////////////////////////////////////////
+
+
+
+#ifndef SMARTRAINHARVEST_H
+#define SMARTRAINHARVEST_H
+
+#include <QMainWindow>
+#include "noaaweatherfetcher.h"
+#include "chartcontainer.h"
+#include "DistanceSensor.h"
+#include "QTimer"
+#include "QPushButton"
+#include <QLabel>
+
+QT_BEGIN_NAMESPACE
+namespace Ui { class SmartRainHarvest; }
+QT_END_NAMESPACE
+
+class QChartView;
+
+class SmartRainHarvest : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    SmartRainHarvest(QWidget *parent = nullptr);
+    ~SmartRainHarvest();
+    QVector<WeatherData> cummulativerain;
+    QVector<WeatherData> depth;
+    QVector<WeatherData> openshut;
+    // These parameters need to be adjusted
+    double max_distance = 100; //Distance to the bottom of the barrel (cm)
+    double waterdepthcriteria = 50; //If there is a rain in the forecast and water depth is higher than this, the valve will open (cm)
+    double cummulativeraincriteria = 50; //This is how much to rain within the next two days so we consider rain in the forecast (mm)
+    double bypassdepthcriteria = 100; //If the water depth in the tank exceeds this, water will be released (cm)
+    double depthtoreleaseto = 75; // When above occures, water will be released to this depth (cm)
+    double minumumdepth = 5; //When rain is in forecast, water will be released to this depth (cm)
+    int Check_Weather_Interval = 10; //Time interval to check the weather and decide on opening or shutting the valve in seconds
+    bool checkdistance = false; //whether a distance sensor is present
+    void StartRelease();
+private:
+    Ui::SmartRainHarvest *ui;
+    NOAAWeatherFetcher fetcher;
+    int latitude = 97;
+    int longitude = 71;
+    ChartContainer *ProbnQuanChartContainer = new ChartContainer();
+    ChartContainer *CummulativeForcastChartContainer = new ChartContainer();
+    ChartContainer *WaterDepthChartContainer = new ChartContainer();
+    ChartContainer *OpenShutChartContainer = new ChartContainer();
+    DistanceSensor distancesensor;
+    QTimer *ReleaseTimer = new QTimer();
+    void ShutTheValve();
+    void OpenTheValve();
+    bool overflow = false;
+    bool state = false;
+    QPushButton *ManualOpenShut;
+    QLabel *DistanceLbl;
+public slots:
+    void on_Check_Timer();
+    void on_Check_Distance();
+    void on_ManualOpenShut();
+
+
+};
+#endif // SMARTRAINHARVEST_H
+
+
+/////////////////////////////////////////////////////////////
+
+
+
