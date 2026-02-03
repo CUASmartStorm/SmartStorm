@@ -41,8 +41,8 @@ public:
     double bypassdepthcriteria = 100;       // Depth threshold for overflow protection (cm)
     double depthtoreleaseto = 75;           // Target depth for overflow release (cm)
     double minumumdepth = 5;                // Target depth for forecast-based release (cm)
-    int Check_Weather_Interval = 10;        // Weather check interval (seconds)
-    bool checkdistance = false;             // Enable/disable distance sensor
+    int Check_Weather_Interval = 1;        // Weather check interval (seconds) (Originally 10)
+    bool checkdistance = true;             // Enable/disable distance sensor
 
     void StartRelease();  // Begin water release process
 

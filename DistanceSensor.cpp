@@ -30,37 +30,38 @@ void DistanceSensor::cleanup() {
     // Cleanup resources if needed
 }
 
-// Measure distance using ultrasonic sensor
 double DistanceSensor::getDistance() {
-#ifdef RasPi
     // Clear the TRIG_PIN
-    digitalWrite(4, LOW);
-    QThread::sleep(2); // Wait for 2 seconds
+#ifdef RasPi
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2); // Wait for 2 microseconds
 
-    // Send a 10 microsecond trigger pulse
-    digitalWrite(4, HIGH);
+    // Send a trigger pulse
+    digitalWrite(TRIG_PIN, HIGH);
     delayMicroseconds(10);
-    digitalWrite(4, LOW);
+    digitalWrite(TRIG_PIN, LOW);
 
-    // Wait for ECHO_PIN to go HIGH (start of pulse)
-    while (digitalRead(17) == LOW);
+    // Wait for ECHO_PIN to go HIGH
+    long timeout = micros() + 30000;
+
+    while (digitalRead(ECHO_PIN) == LOW && micros() < timeout); // Need to activate later
+    if (micros() >= timeout) return -1;
+
     long pulseStart = micros();
 
-    // Wait for ECHO_PIN to go LOW (end of pulse)
-    while (digitalRead(17) == HIGH);
+    // Wait for ECHO_PIN to go LOW
+    timeout = micros() + 30000;
+    while (digitalRead(ECHO_PIN) == HIGH && micros() < timeout);
+    if (micros() >= timeout) return -1;
+
     long pulseEnd = micros();
 
-    // Calculate the distance based on pulse duration
-    // Speed of sound = 343 m/s = 0.0343 cm/us
-    // Distance = (duration / 2) * speed of sound
+    // Calculate the distance
     double pulseDuration = pulseEnd - pulseStart;
     double distance = pulseDuration * 0.01715; // Distance in cm
 
     return std::round(distance * 100.0) / 100.0; // Round to 2 decimal places
 #endif
 
-    // Return random value for testing when not on Raspberry Pi
-    return rand() % 100;
+    return rand()%100;
 }
-
-
