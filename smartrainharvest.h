@@ -30,23 +30,26 @@ public:
     ~SmartRainHarvest();
 
     // Data storage for charts (time series)
-    QVector<WeatherData> cummulativerain;  // Cumulative rain forecast
+    QVector<WeatherData> cummulativeRain;  // Cumulative rain forecast
     QVector<WeatherData> depth;            // Water depth measurements
-    QVector<WeatherData> openshut;         // Valve state history
+    QVector<WeatherData> openShut;         // Valve state history
 
     // System configuration parameters (adjustable)
-    double max_distance = 100;              // Distance to bottom of barrel (cm)
-    double waterdepthcriteria = 50;         // Depth threshold for rain-forecast release (cm)
-    double cummulativeraincriteria = 50;    // Rain amount to trigger release (mm in 2 days)
-    double bypassdepthcriteria = 100;       // Depth threshold for overflow protection (cm)
-    double depthtoreleaseto = 75;           // Target depth for overflow release (cm)
-    double minumumdepth = 5;                // Target depth for forecast-based release (cm)
-    int Check_Weather_Interval = 1;        // Weather check interval (seconds) (Originally 10)
-    bool checkdistance = true;             // Enable/disable distance sensor
+    double barrelDepth = 100;              // Distance to bottom of barrel (cm)
+    double forcastReleaseDepthThreshold = 50;         // Depth threshold for rain-forecast release (cm)
+    double forcastReleaseThreshold = 50;    // Rain amount to trigger release (mm in 2 days)
+    double overflowThreshold = 90;       // Depth threshold for overflow protection (cm)
+    double overflowReleaseTargetDepth = 75;           // Target depth for overflow release (cm)
+    double releaseTargetDepth = 5;                // Target depth for forecast-based release (cm)
+    int checkWeatherInterval = 1;        // Weather check interval (seconds) (Originally 10)
+    int checkReleaseInterval = 1;        // Release check interval (seconds) (Originally 10)
+    bool checkDistance = true;             // Enable/disable distance sensor
 
-    void StartRelease();  // Begin water release process
+    void startRelease();  // Begin water release process
 
 private:
+    const int VALVE_PIN = 18; // BCM pin 18 - Solenoid valve pin
+
     Ui::SmartRainHarvest* ui;
     NOAAWeatherFetcher fetcher;           // Weather API client
     int latitude = 97;                    // Grid latitude coordinate
@@ -61,20 +64,20 @@ private:
     DistanceSensor distancesensor;        // Ultrasonic sensor interface
     QTimer* ReleaseTimer = new QTimer();  // Timer for water release monitoring
 
-    void ShutTheValve();                  // Close valve function
-    void OpenTheValve();                  // Open valve function
+    void shutTheValve();                  // Close valve function
+    void openTheValve();                  // Open valve function
 
-    bool overflow = false;                // Flag: overflow mode active
-    bool state = false;                   // Current valve state (open/closed)
+    bool inOverflowMode = false;                // Flag: overflow mode active
+    bool valveOpen = false;                   // Current valve state (open/closed)
 
     // UI controls
     QPushButton* ManualOpenShut;          // Manual valve control button
     QLabel* DistanceLbl;                  // Distance display label
 
 public slots:
-    void on_Check_Timer();                // Periodic weather check callback
-    void on_Check_Distance();             // Periodic distance check during release
-    void on_ManualOpenShut();             // Manual valve toggle callback
+    void onCheckTimer();                // Periodic weather check callback
+    void onCheckDistance();             // Periodic distance check during release
+    void onManualOpenShut();             // Manual valve toggle callback
 };
 
 #endif // SMARTRAINHARVEST_H

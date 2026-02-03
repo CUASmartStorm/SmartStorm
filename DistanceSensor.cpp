@@ -19,8 +19,8 @@ DistanceSensor::~DistanceSensor() {
 bool DistanceSensor::initialize() {
 #ifdef RasPi
     wiringPiSetupGpio(); // Use BCM pin numbering
-    pinMode(4, OUTPUT);   // Trigger pin
-    pinMode(17, INPUT);   // Echo pin
+    pinMode(TRIG_PIN, OUTPUT);   // Trigger pin
+    pinMode(ECHO_PIN, INPUT);   // Echo pin
 #endif
     return true;
 }
@@ -38,11 +38,11 @@ double DistanceSensor::getDistance() {
 
     // Send a trigger pulse
     digitalWrite(TRIG_PIN, HIGH);
-    delayMicroseconds(10);
+    delayMicroseconds(10); // Originally 10 micros.
     digitalWrite(TRIG_PIN, LOW);
 
     // Wait for ECHO_PIN to go HIGH
-    long timeout = micros() + 30000;
+    long timeout = micros() + 300000;
 
     while (digitalRead(ECHO_PIN) == LOW && micros() < timeout); // Need to activate later
     if (micros() >= timeout) return -1;
@@ -50,7 +50,7 @@ double DistanceSensor::getDistance() {
     long pulseStart = micros();
 
     // Wait for ECHO_PIN to go LOW
-    timeout = micros() + 30000;
+    timeout = micros() + 300000;
     while (digitalRead(ECHO_PIN) == HIGH && micros() < timeout);
     if (micros() >= timeout) return -1;
 
@@ -60,8 +60,9 @@ double DistanceSensor::getDistance() {
     double pulseDuration = pulseEnd - pulseStart;
     double distance = pulseDuration * 0.01715; // Distance in cm
 
+
     return std::round(distance * 100.0) / 100.0; // Round to 2 decimal places
 #endif
 
-    return rand()%100;
+    return 0;
 }

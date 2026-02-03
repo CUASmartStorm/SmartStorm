@@ -33,11 +33,11 @@ SmartRainHarvest::SmartRainHarvest(QWidget* parent)
     QTimer* CheckWeatherTimer = new QTimer();
 
     // Connect timers to their respective slots
-    connect(CheckWeatherTimer, SIGNAL(timeout()), this, SLOT(on_Check_Timer()));
-    connect(ReleaseTimer, SIGNAL(timeout()), this, SLOT(on_Check_Distance()));
+    connect(CheckWeatherTimer, SIGNAL(timeout()), this, SLOT(onCheckTimer()));
+    connect(ReleaseTimer, SIGNAL(timeout()), this, SLOT(onCheckDistance()));
 
     // Start weather check timer (interval defined in class)
-    CheckWeatherTimer->start(Check_Weather_Interval * 1000);
+    CheckWeatherTimer->start(checkWeatherInterval * 1000);
 
     // Setup UI layout with charts
     splitter->addWidget(ProbnQuanChartContainer->GetChartView());
@@ -54,7 +54,7 @@ SmartRainHarvest::SmartRainHarvest(QWidget* parent)
     ManualOpenShut->setText("Open Valve");
     DistanceLbl = new QLabel(splitter);
     buttonslayout->addWidget(DistanceLbl);
-    connect(ManualOpenShut, SIGNAL(clicked()), this, SLOT(on_ManualOpenShut()));
+    connect(ManualOpenShut, SIGNAL(clicked()), this, SLOT(onManualOpenShut()));
 
     // Set stretch factors for splitters (relative sizing)
     splitter->setStretchFactor(0, 1);
@@ -69,10 +69,10 @@ SmartRainHarvest::SmartRainHarvest(QWidget* parent)
 
     // Initialize distance sensor and valve control pin
     distancesensor.initialize();
-    pinMode(18, OUTPUT);  // GPIO 18 for valve control
+    pinMode(VALVE_PIN, OUTPUT);  // GPIO 18 for valve control
 
     // Run initial weather check
-    on_Check_Timer();
+    onCheckTimer();
 }
 
 // Destructor
@@ -82,7 +82,7 @@ SmartRainHarvest::~SmartRainHarvest()
 }
 
 // Periodic timer callback - Check weather and update system state
-void SmartRainHarvest::on_Check_Timer()
+void SmartRainHarvest::onCheckTimer()
 {
     qDebug() << "Checking weather!";
 
@@ -106,124 +106,135 @@ void SmartRainHarvest::on_Check_Timer()
     ProbnQuanChartContainer->GetChartView()->setRenderHint(QPainter::Antialiasing);
 
     // Maintain rolling window of 30 cumulative rain data points
-    if (cummulativerain.count() > 30) cummulativerain.removeFirst();
+    if (cummulativeRain.count() > 30) cummulativeRain.removeFirst();
 
     // Calculate and store 2-day cumulative rain forecast
-    cummulativerain.append({ QDateTime::currentDateTime(),calculateCumulativeValue(rainamountdata,2) });
-    CummulativeForcastChartContainer->plotWeatherData(cummulativerain, "Cummulative rain forecast [mm]");
+    cummulativeRain.append({ QDateTime::currentDateTime(),calculateCumulativeValue(rainamountdata,2) });
+    CummulativeForcastChartContainer->plotWeatherData(cummulativeRain, "Cummulative rain forecast [mm]");
 
     // Check distance sensor if enabled
     double distance;
-    if (checkdistance)
+    if (checkDistance)
     {
-        distance = distancesensor.getDistance();
-        qDebug() << "Distance = " << distance << " cm";
-        DistanceLbl->setText(QString::number(distance));
+        if (!valveOpen) // The depth is found using the release timer if in release mode.
+        {
+            distance = barrelDepth - distancesensor.getDistance();
+            // Cap water depth.
+            if (distance > barrelDepth) distance = barrelDepth;
+            else if (distance < 0) distance = 0;
 
-        // Maintain rolling window of 30 depth measurements
-        if (depth.count() > 30) depth.removeFirst();
-        depth.append({ QDateTime::currentDateTime(), max_distance - distance });
-        WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
+            qDebug() << "Distance = " << distance << " cm";
+            DistanceLbl->setText(QString::number(distance));
+
+            // Maintain rolling window of 30 depth measurements
+            if (depth.count() > 30) depth.removeFirst();
+            depth.append({ QDateTime::currentDateTime(), distance });
+            WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
+        }
 
         // Decision logic: Open valve if depth is high AND rain is forecast
-        if (depth.last().value > waterdepthcriteria && cummulativerain.last().value > cummulativeraincriteria)
+        if (depth.last().value > forcastReleaseDepthThreshold && cummulativeRain.last().value > forcastReleaseThreshold)
         {
-            overflow = false;
-            StartRelease();
+            inOverflowMode = false;
+            startRelease();
         }
 
         // Decision logic: Open valve if depth exceeds bypass threshold (overflow protection)
-        if (depth.last().value > bypassdepthcriteria)
+        if (depth.last().value > overflowThreshold)
         {
-            overflow = true;
-            StartRelease();
+            inOverflowMode = true;
+            startRelease();
         }
     }
 
     // Update valve state chart (maintain rolling window of 100 points)
-    if (openshut.count() > 100) openshut.removeFirst();
-    openshut.append({ QDateTime::currentDateTime(), double(int(state)) });
-    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off)");
+    if (openShut.count() > 100) openShut.removeFirst();
+    openShut.append({ QDateTime::currentDateTime(), double(int(valveOpen)) });
+    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off)");
 
     // Update manual button text based on current state
-    if (!state)
+    if (!valveOpen)
         ManualOpenShut->setText("Open the Valve");
     else
         ManualOpenShut->setText("Shut the Valve");
 }
 
 // Start the water release timer
-void SmartRainHarvest::StartRelease()
+void SmartRainHarvest::startRelease()
 {
-    ReleaseTimer->start(10000);  // Check every 10 seconds
+    ReleaseTimer->start(checkReleaseInterval * 1000);  // Check for target depth on a timer.
 }
 
 // Distance check callback during water release
-void SmartRainHarvest::on_Check_Distance()
+void SmartRainHarvest::onCheckDistance()
 {
     // Measure current water depth
-    double distance = distancesensor.getDistance();
+    double distance = barrelDepth - distancesensor.getDistance();
+    // Cap water depth.
+    if (distance > barrelDepth) distance = barrelDepth;
+    else if (distance < 0) distance = 0;
+
     if (depth.count() > 30) depth.removeFirst();
-    depth.append({ QDateTime::currentDateTime(), max_distance - distance });
+    depth.append({ QDateTime::currentDateTime(), distance });
     WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
 
     // Update valve state chart
-    if (openshut.count() > 100) openshut.removeFirst();
-    openshut.append({ QDateTime::currentDateTime(), double(state) });
-    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off");
+    if (openShut.count() > 100) openShut.removeFirst();
+    openShut.append({ QDateTime::currentDateTime(), double(valveOpen) });
+    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off");
 
     // Decision logic: Stop release when target depth is reached
-    if (depth.last().value < (overflow ? depthtoreleaseto : minumumdepth))
+    if (depth.last().value < (inOverflowMode ? overflowReleaseTargetDepth : releaseTargetDepth))
     {
         ReleaseTimer->stop();
-        ShutTheValve();
-        state = false;
+        shutTheValve();
+        valveOpen = false;
     }
     else
     {
         // Continue releasing water
-        OpenTheValve();
-        state = true;
+        openTheValve();
+        valveOpen = true;
     }
 }
 
 // Open the solenoid valve (GPIO HIGH)
-void SmartRainHarvest::OpenTheValve() {
-    digitalWrite(18, HIGH);
+void SmartRainHarvest::openTheValve() {
+    digitalWrite(VALVE_PIN, HIGH);
     qDebug() << "The valve is now open";
 }
 
 // Close the solenoid valve (GPIO LOW)
-void SmartRainHarvest::ShutTheValve() {
-    digitalWrite(18, LOW);
+void SmartRainHarvest::shutTheValve() {
+    digitalWrite(VALVE_PIN, LOW);
     qDebug() << "The valve is now shut";
 }
 
 // Manual valve control button callback
-void SmartRainHarvest::on_ManualOpenShut()
+void SmartRainHarvest::onManualOpenShut()
 {
     // Toggle valve state
-    if (state)
+    if (valveOpen)
     {
-        ShutTheValve();
-        state = false;
+        shutTheValve();
+        valveOpen = false;
     }
     else
     {
-        OpenTheValve();
-        state = true;
+        openTheValve();
+        valveOpen = true;
     }
 
     // Update button text
-    if (!state)
+    if (!valveOpen)
         ManualOpenShut->setText("Open the Valve");
     else
         ManualOpenShut->setText("Shut the Valve");
 
     // Update valve state chart
-    if (openshut.count() > 100) openshut.removeFirst();
-    openshut.append({ QDateTime::currentDateTime(), double(int(state)) });
-    OpenShutChartContainer->plotWeatherData(openshut, "Valve State (on/off)");
+    if (openShut.count() > 100) openShut.removeFirst();
+    openShut.append({ QDateTime::currentDateTime(), double(int(valveOpen)) });
+    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off)");
 }
 
 
