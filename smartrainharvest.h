@@ -13,6 +13,7 @@
 #include "QTimer"
 #include "QPushButton"
 #include <QLabel>
+#include "DatabaseWriter.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class SmartRainHarvest; }
@@ -41,8 +42,8 @@ public:
     double overflowThreshold = 90;       // Depth threshold for overflow protection (cm)
     double overflowReleaseTargetDepth = 75;           // Target depth for overflow release (cm)
     double releaseTargetDepth = 5;                // Target depth for forecast-based release (cm)
-    int checkWeatherInterval = 1;        // Weather check interval (seconds) (Originally 10)
-    int checkReleaseInterval = 1;        // Release check interval (seconds) (Originally 10)
+    int checkWeatherInterval = 10;        // Weather check interval (seconds) (Originally 10)
+    int checkReleaseInterval = 10;        // Release check interval (seconds) (Originally 10)
     bool checkDistance = true;             // Enable/disable distance sensor
 
     void startRelease();  // Begin water release process
@@ -73,6 +74,8 @@ private:
     // UI controls
     QPushButton* ManualOpenShut;          // Manual valve control button
     QLabel* DistanceLbl;                  // Distance display label
+
+    DatabaseWriter dbWriter;  // Database API writer
 
 public slots:
     void onCheckTimer();                // Periodic weather check callback

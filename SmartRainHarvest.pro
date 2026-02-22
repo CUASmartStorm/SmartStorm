@@ -14,6 +14,7 @@ CONFIG += c++11
 DEFINES += Qt5
 
 SOURCES += \
+    DatabaseWriter.cpp \
     DistanceSensor.cpp \
     chartcontainer.cpp \
     main.cpp \
@@ -21,6 +22,7 @@ SOURCES += \
     smartrainharvest.cpp
 
 HEADERS += \
+    DatabaseWriter.h \
     DistanceSensor.h \
     chartcontainer.h \
     noaaweatherfetcher.h \

@@ -116,6 +116,11 @@ void SmartRainHarvest::onCheckTimer()
     cummulativeRain.append({ QDateTime::currentDateTime(),calculateCumulativeValue(rainamountdata,2) });
     CummulativeForcastChartContainer->plotWeatherData(cummulativeRain, "Cummulative rain forecast [mm]");
 
+    // Write weather forecasts to database (server upserts by sensor_id + timestamp)
+    dbWriter.sendWeatherData("precip_amount", "mm", rainamountdata);
+    dbWriter.sendWeatherData("precip_prob", "%", rainprobdata);
+    dbWriter.sendWeatherData("temperature", "C", tempdata);
+
     // Check distance sensor if enabled
     double distance;
     if (checkDistance)
@@ -129,7 +134,7 @@ void SmartRainHarvest::onCheckTimer()
 
             qDebug() << "Distance = " << distance << " cm";
             DistanceLbl->setText(QString::number(distance));
-
+            dbWriter.sendDepthReading(distance);
             // Maintain rolling window of 30 depth measurements
             if (depth.count() > 30) depth.removeFirst();
             depth.append({ QDateTime::currentDateTime(), distance });
@@ -150,6 +155,8 @@ void SmartRainHarvest::onCheckTimer()
             startRelease();
         }
     }
+
+
 
     // Update valve state chart (maintain rolling window of 100 points)
     if (openShut.count() > 100) openShut.removeFirst();
@@ -200,6 +207,7 @@ void SmartRainHarvest::onCheckDistance()
         openTheValve();
         valveOpen = true;
     }
+    dbWriter.sendValveState(valveOpen);
 }
 
 // Open the solenoid valve (GPIO HIGH)
@@ -243,6 +251,7 @@ void SmartRainHarvest::onManualOpenShut()
     if (openShut.count() > 100) openShut.removeFirst();
     openShut.append({ QDateTime::currentDateTime(), double(int(valveOpen)) });
     OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off)");
+    dbWriter.sendValveState(valveOpen);
 }
 
 
