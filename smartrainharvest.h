@@ -1,4 +1,3 @@
-
 /////////////////////////////////////////////////////////////
 // SMARTRAINHARVEST.H - Main Application Class Header
 /////////////////////////////////////////////////////////////
@@ -10,80 +9,159 @@
 #include "noaaweatherfetcher.h"
 #include "chartcontainer.h"
 #include "DistanceSensor.h"
-#include "QTimer"
-#include "QPushButton"
-#include <QLabel>
 #include "DatabaseWriter.h"
+#include <QTimer>
+#include <QPushButton>
+#include <QLabel>
+#include <QCheckBox>
+#include <QGroupBox>
+#include <QFrame>
+#include <QProgressBar>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGridLayout>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class SmartRainHarvest; }
 QT_END_NAMESPACE
 
-class QChartView;
+// ── System operating states ────────────────────────────────
+enum class SystemState {
+    Monitoring,
+    Releasing
+};
 
-// Main application class - Smart rain harvesting system controller
+enum class ReleaseReason {
+    None,
+    Overflow,
+    Forecast
+};
+
 class SmartRainHarvest : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    SmartRainHarvest(QWidget* parent = nullptr);
+    SmartRainHarvest(QWidget *parent = nullptr);
     ~SmartRainHarvest();
 
-    // Data storage for charts (time series)
-    QVector<WeatherData> cummulativeRain;  // Cumulative rain forecast
-    QVector<WeatherData> depth;            // Water depth measurements
-    QVector<WeatherData> openShut;         // Valve state history
+    // ── Tunable parameters ─────────────────────────────────
 
-    // System configuration parameters (adjustable)
-    double barrelDepth = 100;              // Distance to bottom of barrel (cm)
-    double forcastReleaseDepthThreshold = 50;         // Depth threshold for rain-forecast release (cm)
-    double forcastReleaseThreshold = 50;    // Rain amount to trigger release (mm in 2 days)
-    double overflowThreshold = 90;       // Depth threshold for overflow protection (cm)
-    double overflowReleaseTargetDepth = 75;           // Target depth for overflow release (cm)
-    double releaseTargetDepth = 5;                // Target depth for forecast-based release (cm)
-    int checkWeatherInterval = 10;        // Weather check interval (seconds) (Originally 10)
-    int checkReleaseInterval = 10;        // Release check interval (seconds) (Originally 10)
-    bool checkDistance = true;             // Enable/disable distance sensor
+    // Physical distance from the ultrasonic sensor (mounted at top)
+    // to the bottom of the barrel. All depth readings are calculated
+    // as: depth = barrelDepth − sensorReading
+    double barrelDepth = 100;                        // cm
 
-    void startRelease();  // Begin water release process
+    // Forecast-based release triggers when BOTH conditions are met:
+    //   1. Current water depth  >  forecastReleaseDepthThreshold
+    //   2. 2-day cumulative rain >  forecastReleaseThreshold
+    // The system then drains down to forecastTargetDepth.
+    double forecastReleaseDepthThreshold = 20;       // cm  — min water level to consider draining
+    double forecastReleaseThreshold      = 15;       // mm  — min predicted rain (2-day sum)
+    double forecastTargetDepth           = 5;        // cm  — drain-to depth in forecast mode
+
+    // Overflow protection triggers when:
+    //   Current water depth  >  overflowThreshold
+    // This fires regardless of the rain forecast (safety mechanism).
+    // The system drains down to overflowTargetDepth.
+    double overflowThreshold     = 90;               // cm  — emergency release trigger
+    double overflowTargetDepth   = 75;               // cm  — drain-to depth in overflow mode
+    int monitoringInterval  = 10;                    // Interval during closed valve mode (seconds)
+    int releaseInterval     = 5;                     // Interval during open valve mode (seconds)
+    bool sensorEnabled      = true;
+
+private slots:
+    void onMonitoringTick();
+    void onReleaseTick();
+    void onManualOpenShut();
+    void onAutoControlToggled(bool checked);
 
 private:
-    const int VALVE_PIN = 18; // BCM pin 18 - Solenoid valve pin
+    // ── State ──────────────────────────────────────────────
+    SystemState   state         = SystemState::Monitoring;
+    ReleaseReason releaseReason = ReleaseReason::None;
+    bool          valveOpen     = false;
+    bool          autoControl   = true;
+    double        releaseTarget = 0;
+    double        lastDepth     = 0;
+    double        lastCumRain   = 0;
 
-    Ui::SmartRainHarvest* ui;
-    NOAAWeatherFetcher fetcher;           // Weather API client
-    int latitude = 97;                    // Grid latitude coordinate
-    int longitude = 71;                   // Grid longitude coordinate
+    // ── Hardware ───────────────────────────────────────────
+    const int VALVE_PIN = 18;
+    DistanceSensor distanceSensor;
+    void openValve();
+    void shutValve();
 
-    // Chart containers for visualization
-    ChartContainer* ProbnQuanChartContainer = new ChartContainer();          // Weather forecasts
-    ChartContainer* CummulativeForcastChartContainer = new ChartContainer(); // Cumulative rain
-    ChartContainer* WaterDepthChartContainer = new ChartContainer();         // Water depth
-    ChartContainer* OpenShutChartContainer = new ChartContainer();           // Valve state
+    // ── Depth measurement ──────────────────────────────────
+    double measureDepth();
+    int sensorFailCount = 0;           // Consecutive failed readings
+    static const int MAX_SENSOR_FAILS = 3;  // Show error after this many
 
-    DistanceSensor distancesensor;        // Ultrasonic sensor interface
-    QTimer* ReleaseTimer = new QTimer();  // Timer for water release monitoring
+    // ── State transitions ──────────────────────────────────
+    void enterReleaseMode(ReleaseReason reason, double target);
+    void enterMonitoringMode();
 
-    void shutTheValve();                  // Close valve function
-    void openTheValve();                  // Open valve function
+    // ── Timers ─────────────────────────────────────────────
+    QTimer *monitoringTimer;
+    QTimer *releaseTimer;
 
-    bool inOverflowMode = false;                // Flag: overflow mode active
-    bool valveOpen = false;                   // Current valve state (open/closed)
+    // ── Weather ────────────────────────────────────────────
+    NOAAWeatherFetcher fetcher;
+    int gridX = 97;
+    int gridY = 71;
 
-    // UI controls
-    QPushButton* ManualOpenShut;          // Manual valve control button
-    QLabel* DistanceLbl;                  // Distance display label
+    // ── Data history ───────────────────────────────────────
+    QVector<WeatherData> cumulativeRainHistory;
+    QVector<WeatherData> depthHistory;
+    QVector<WeatherData> valveHistory;
+    static const int MAX_HISTORY = 100;
 
-    DatabaseWriter dbWriter;  // Database API writer
+    void recordDepth(double depth);
+    void recordValveState();
 
-public slots:
-    void onCheckTimer();                // Periodic weather check callback
-    void onCheckDistance();             // Periodic distance check during release
-    void onManualOpenShut();             // Manual valve toggle callback
+    // ── UI setup ───────────────────────────────────────────
+    Ui::SmartRainHarvest *ui;
+    void setupDashboard();
+    void updateInfoPanels();
+    void updateModeIndicator();
+    void updateValveButton();
+
+    // ── Charts ─────────────────────────────────────────────
+    ChartContainer *weatherChart    = new ChartContainer();
+    ChartContainer *cumulativeChart = new ChartContainer();
+    ChartContainer *depthChart      = new ChartContainer();
+    ChartContainer *valveChart      = new ChartContainer();
+
+    // ── Info panel labels ──────────────────────────────────
+    QLabel *depthValueLabel;
+    QLabel *depthUnitLabel;
+    QLabel *sensorStatusLabel;
+    QProgressBar *depthBar;
+
+    QLabel *rainValueLabel;
+    QLabel *rainUnitLabel;
+    QProgressBar *rainBar;
+
+    QLabel *modeValueLabel;
+    QLabel *modeReasonLabel;
+    QFrame *modeIndicator;
+
+    QLabel *valveValueLabel;
+    QFrame *valveIndicator;
+
+    // ── Threshold labels ───────────────────────────────────
+    QLabel *threshOverflowLabel;
+    QLabel *threshForecastDepthLabel;
+    QLabel *threshForecastRainLabel;
+    QLabel *threshOverflowTargetLabel;
+    QLabel *threshForecastTargetLabel;
+
+    // ── Controls ───────────────────────────────────────────
+    QPushButton *manualButton;
+    QCheckBox   *autoControlCheckBox;
+
+    // ── Database ───────────────────────────────────────────
+    DatabaseWriter dbWriter;
 };
 
 #endif // SMARTRAINHARVEST_H
-
-
-/////////////////////////////////////////////////////////////

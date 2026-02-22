@@ -1,4 +1,3 @@
-
 /////////////////////////////////////////////////////////////
 // DISTANCESENSOR.CPP - Ultrasonic Distance Sensor Control
 /////////////////////////////////////////////////////////////
@@ -6,63 +5,76 @@
 #include "DistanceSensor.h"
 #include <cmath>
 
-// Constructor
 DistanceSensor::DistanceSensor() {
 }
 
-// Destructor - cleanup resources
 DistanceSensor::~DistanceSensor() {
     cleanup();
 }
 
-// Initialize the distance sensor GPIO pins
 bool DistanceSensor::initialize() {
 #ifdef RasPi
-    wiringPiSetupGpio(); // Use BCM pin numbering
-    pinMode(TRIG_PIN, OUTPUT);   // Trigger pin
-    pinMode(ECHO_PIN, INPUT);   // Echo pin
+    wiringPiSetupGpio();
+    pinMode(TRIG_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+    digitalWrite(TRIG_PIN, LOW);
+    QThread::msleep(50);  // Let sensor settle
 #endif
     return true;
 }
 
-// Cleanup function (placeholder for future resource management)
 void DistanceSensor::cleanup() {
-    // Cleanup resources if needed
 }
 
 double DistanceSensor::getDistance() {
-    // Clear the TRIG_PIN
 #ifdef RasPi
+    // ── Send trigger pulse ─────────────────────────────────
     digitalWrite(TRIG_PIN, LOW);
-    delayMicroseconds(2); // Wait for 2 microseconds
+    delayMicroseconds(2);
 
-    // Send a trigger pulse
     digitalWrite(TRIG_PIN, HIGH);
-    delayMicroseconds(10); // Originally 10 micros.
+    delayMicroseconds(10);
     digitalWrite(TRIG_PIN, LOW);
 
-    // Wait for ECHO_PIN to go HIGH
-    long timeout = micros() + 300000;
-
-    while (digitalRead(ECHO_PIN) == LOW && micros() < timeout); // Need to activate later
-    if (micros() >= timeout) return -1;
-
+    // ── Wait for ECHO to go HIGH (start of pulse) ─────────
+    // Timeout: 30ms — if echo never goes HIGH, sensor is
+    // disconnected or on the wrong pin
+    long timeout = micros() + 30000;
+    while (digitalRead(ECHO_PIN) == LOW) {
+        if (micros() >= timeout) {
+            qWarning() << "DistanceSensor: ECHO never went HIGH"
+                       << "— sensor may be disconnected";
+            return -1;
+        }
+    }
     long pulseStart = micros();
 
-    // Wait for ECHO_PIN to go LOW
-    timeout = micros() + 300000;
-    while (digitalRead(ECHO_PIN) == HIGH && micros() < timeout);
-    if (micros() >= timeout) return -1;
-
+    // ── Wait for ECHO to go LOW (end of pulse) ────────────
+    // Timeout: 30ms — covers max range (~5m)
+    timeout = micros() + 30000;
+    while (digitalRead(ECHO_PIN) == HIGH) {
+        if (micros() >= timeout) {
+            qWarning() << "DistanceSensor: ECHO stuck HIGH"
+                       << "— sensor may be malfunctioning";
+            return -1;
+        }
+    }
     long pulseEnd = micros();
 
-    // Calculate the distance
+    // ── Calculate distance ─────────────────────────────────
     double pulseDuration = pulseEnd - pulseStart;
-    double distance = pulseDuration * 0.01715; // Distance in cm
+    double distance = pulseDuration * 0.01715;  // cm
 
+    // Sanity check: HC-SR04 range is 2–400 cm
+    if (distance < 0 || distance > 400) {
+        qWarning() << "DistanceSensor: reading out of range:"
+                   << distance << "cm";
+        return -1;
+    }
 
-    return std::round(distance * 100.0) / 100.0; // Round to 2 decimal places
+    return std::round(distance * 100.0) / 100.0;
 #endif
 
-    return 0;
+    // Non-RasPi: simulate mid-barrel reading for testing
+    return 50;
 }

@@ -1,0 +1,66 @@
+---
+title: SmartRainHarvest — Valve Control Algorithm
+---
+flowchart TD
+    START(["⏱️ Timer Tick (every 10s)"]) --> FETCH["Fetch NOAA Forecasts\n• Precipitation Amount\n• Precipitation Probability\n• Temperature"]
+    FETCH --> DB1[("Send forecasts\nto AWS DynamoDB")]
+    DB1 --> CALC["Calculate 2-day\nCumulative Rain Forecast"]
+    CALC --> CHK_EN{"Distance sensor\nenabled?"}
+
+    CHK_EN -- No --> UPDATE_CHART["Update valve state chart"]
+    CHK_EN -- Yes --> CHK_VALVE{"Valve currently\nopen?"}
+
+    CHK_VALVE -- Yes --> UPDATE_CHART
+    CHK_VALVE -- No --> MEASURE["Measure water depth\ndepth = barrelDepth − sensorDistance"]
+    MEASURE --> CAP["Cap depth\n0 ≤ depth ≤ barrelDepth"]
+    CAP --> DB2[("Send depth reading\nto AWS DynamoDB")]
+
+    DB2 --> CHK_OVERFLOW{"depth > 90 cm?\n(overflow threshold)"}
+
+    CHK_OVERFLOW -- Yes --> SET_OVERFLOW["Set overflow mode = TRUE\nTarget depth = 75 cm"]
+    SET_OVERFLOW --> START_RELEASE["🔓 Open valve\nStart release timer"]
+
+    CHK_OVERFLOW -- No --> CHK_FORECAST{"depth > 50 cm\nAND\ncumRain > 50 mm?"}
+
+    CHK_FORECAST -- Yes --> SET_FORECAST["Set overflow mode = FALSE\nTarget depth = 5 cm"]
+    SET_FORECAST --> START_RELEASE
+
+    CHK_FORECAST -- No --> UPDATE_CHART
+
+    START_RELEASE --> RELEASE_LOOP(["⏱️ Release Timer (every 10s)"])
+    RELEASE_LOOP --> MEASURE2["Measure water depth"]
+    MEASURE2 --> CAP2["Cap depth\n0 ≤ depth ≤ barrelDepth"]
+
+    CAP2 --> CHK_TARGET{"depth < target?"}
+    CHK_TARGET -- Yes --> SHUT["🔒 Shut valve\nStop release timer"]
+    SHUT --> DB3[("Send valve state = OFF\nto AWS DynamoDB")]
+    DB3 --> UPDATE_CHART
+
+    CHK_TARGET -- No --> KEEP_OPEN["Keep valve open"]
+    KEEP_OPEN --> DB4[("Send valve state = ON\nto AWS DynamoDB")]
+    DB4 --> RELEASE_LOOP
+
+    UPDATE_CHART --> END_TICK(["Wait for next timer tick"])
+
+    %% Manual override
+    MANUAL(["👆 Manual Button Press"]) --> TOGGLE{"Valve open?"}
+    TOGGLE -- Yes --> M_SHUT["🔒 Shut valve"]
+    TOGGLE -- No --> M_OPEN["🔓 Open valve"]
+    M_SHUT --> M_DB[("Send valve state\nto AWS DynamoDB")]
+    M_OPEN --> M_DB
+    M_DB --> M_CHART["Update valve state chart"]
+
+    %% Styling
+    classDef trigger fill:#1565C0,stroke:#0D47A1,color:white,stroke-width:2px
+    classDef decision fill:#4A148C,stroke:#311B92,color:white,stroke-width:2px
+    classDef action fill:#1B5E20,stroke:#0D3B12,color:white,stroke-width:2px
+    classDef database fill:#E65100,stroke:#BF360C,color:white,stroke-width:2px
+    classDef danger fill:#B71C1C,stroke:#7F0000,color:white,stroke-width:2px
+    classDef manual fill:#00695C,stroke:#004D40,color:white,stroke-width:2px
+
+    class START,RELEASE_LOOP,END_TICK trigger
+    class CHK_EN,CHK_VALVE,CHK_OVERFLOW,CHK_FORECAST,CHK_TARGET,TOGGLE decision
+    class FETCH,CALC,MEASURE,CAP,MEASURE2,CAP2,SET_OVERFLOW,SET_FORECAST,START_RELEASE,KEEP_OPEN,UPDATE_CHART action
+    class SHUT,M_SHUT danger
+    class DB1,DB2,DB3,DB4,M_DB database
+    class MANUAL,M_OPEN,M_SHUT,M_CHART,M_DB manual

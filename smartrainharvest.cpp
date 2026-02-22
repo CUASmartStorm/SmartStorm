@@ -1,257 +1,811 @@
-
 /////////////////////////////////////////////////////////////
 // SMARTRAINHARVEST.CPP - Main Application Logic
+//
+//  Two-state architecture:
+//    MONITORING  — slow timer, fetches weather, measures depth,
+//                  evaluates release rules
+//    RELEASING   — fast timer, measures depth, checks if target
+//                  has been reached, shuts valve when done
 /////////////////////////////////////////////////////////////
 
 #include "smartrainharvest.h"
 #include "ui_smartrainharvest.h"
-#include "noaaweatherfetcher.h"
-#include "chartcontainer.h"
 #include <QMap>
-#include <QTimer>
-#include <DistanceSensor.h>
 #include <QSplitter>
-#include <QLabel>
-#include <QPushButton>
+#include <QFont>
 #ifdef RasPi
 #include <wiringPi.h>
 #endif
 
-// Constructor - Initialize the main window and all components
-SmartRainHarvest::SmartRainHarvest(QWidget* parent)
+// ================================================================
+//  Constructor / Destructor
+// ================================================================
+
+SmartRainHarvest::SmartRainHarvest(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::SmartRainHarvest)
 {
     ui->setupUi(this);
 
-    // Location coordinates (Washington DC area)
-    //Latitude 38.9072° N
-    //Longitude: 77.0369 W
+    // Timers
+    monitoringTimer = new QTimer(this);
+    releaseTimer    = new QTimer(this);
+    connect(monitoringTimer, &QTimer::timeout,
+            this, &SmartRainHarvest::onMonitoringTick);
+    connect(releaseTimer, &QTimer::timeout,
+            this, &SmartRainHarvest::onReleaseTick);
 
-    // Create vertical splitter for main layout
-    QSplitter* splitter = new QSplitter(Qt::Vertical, this);
+    setupDashboard();
 
-    // Create timer for periodic weather checks
-    QTimer* CheckWeatherTimer = new QTimer();
-
-    // Connect timers to their respective slots
-    connect(CheckWeatherTimer, SIGNAL(timeout()), this, SLOT(onCheckTimer()));
-    connect(ReleaseTimer, SIGNAL(timeout()), this, SLOT(onCheckDistance()));
-
-    // Start weather check timer (interval defined in class)
-    CheckWeatherTimer->start(checkWeatherInterval * 1000);
-
-    // Setup UI layout with charts
-    splitter->addWidget(ProbnQuanChartContainer->GetChartView());
-    QSplitter* hsplitter = new QSplitter(Qt::Horizontal, splitter);
-    hsplitter->addWidget(CummulativeForcastChartContainer->GetChartView());
-    hsplitter->addWidget(WaterDepthChartContainer->GetChartView());
-    splitter->addWidget(OpenShutChartContainer->GetChartView());
-
-    // Create control panel with manual valve button and distance display
-    QWidget* layoutWidget1 = new QWidget(hsplitter);
-    QVBoxLayout* buttonslayout = new QVBoxLayout(layoutWidget1);
-    ManualOpenShut = new QPushButton(splitter);
-    buttonslayout->addWidget(ManualOpenShut);
-    ManualOpenShut->setText("Open Valve");
-    DistanceLbl = new QLabel(splitter);
-    buttonslayout->addWidget(DistanceLbl);
-    connect(ManualOpenShut, SIGNAL(clicked()), this, SLOT(onManualOpenShut()));
-
-    // Set stretch factors for splitters (relative sizing)
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 1);
-    splitter->setStretchFactor(2, 1);
-    hsplitter->setStretchFactor(0, 3);
-    hsplitter->setStretchFactor(1, 3);
-    hsplitter->setStretchFactor(2, 1);
-
-    // Set the splitter as the central widget
-    setCentralWidget(splitter);
-
-    // Initialize distance sensor and valve control pin
-    distancesensor.initialize();
+    // Hardware
+    distanceSensor.initialize();
 #ifdef RasPi
-    pinMode(VALVE_PIN, OUTPUT);  // GPIO 18 for valve control
+    pinMode(VALVE_PIN, OUTPUT);
 #endif
 
-    // Run initial weather check
-    onCheckTimer();
+    enterMonitoringMode();
+    onMonitoringTick();
 }
 
-// Destructor
 SmartRainHarvest::~SmartRainHarvest()
 {
     delete ui;
 }
 
-// Periodic timer callback - Check weather and update system state
-void SmartRainHarvest::onCheckTimer()
+// ================================================================
+//  UI Setup
+// ================================================================
+
+void SmartRainHarvest::setupDashboard()
 {
-    qDebug() << "Checking weather!";
+    setWindowTitle("SmartRainHarvest");
+    resize(1400, 900);
 
-    // Container for multiple weather data series
-    QMap<QString, QVector<WeatherData>> precip_data;
+    // ── Global stylesheet ──────────────────────────────────
+    setStyleSheet(R"(
+        QMainWindow {
+            background-color: #1a1d23;
+        }
+        QSplitter::handle {
+            background-color: #2d3139;
+        }
+    )");
 
-    // Fetch precipitation amount forecast
-    QVector<WeatherData> rainamountdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::PrecipitationAmount);
-    precip_data["Precipitation [mm]"] = rainamountdata;
+    // ── Helper: create an info card ────────────────────────
+    auto makeCard = [](const QString &title, QWidget *parent) -> QGroupBox* {
+        QGroupBox *box = new QGroupBox(title, parent);
+        box->setStyleSheet(R"(
+            QGroupBox {
+                font-size: 11px;
+                font-weight: bold;
+                color: #78909c;
+                background-color: #21252b;
+                border: 1px solid #2d3139;
+                border-radius: 8px;
+                margin-top: 12px;
+                padding-top: 18px;
+                padding-left: 10px;
+                padding-right: 10px;
+                padding-bottom: 6px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+            }
+            QLabel {
+                color: #cfd8dc;
+                background: transparent;
+                border: none;
+            }
+        )");
+        return box;
+    };
 
-    // Fetch precipitation probability forecast
-    QVector<WeatherData> rainprobdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::ProbabilityofPrecipitation);
-    precip_data["Precipitation probability (%)"] = rainprobdata;
+    // ── Helper: big value label ────────────────────────────
+    auto makeBigLabel = [](const QString &text) -> QLabel* {
+        QLabel *lbl = new QLabel(text);
+        QFont f;
+        f.setPixelSize(28);
+        f.setBold(true);
+        lbl->setFont(f);
+        lbl->setStyleSheet("color: #eceff1; background: transparent;");
+        return lbl;
+    };
 
-    // Fetch temperature forecast
-    QVector<WeatherData> tempdata = fetcher.getWeatherPrediction(latitude, longitude, datatype::Temperature);
-    precip_data["Temperature (<sup>o</sup>C)"] = tempdata;
+    // ── Helper: small label ────────────────────────────────
+    auto makeSmallLabel = [](const QString &text) -> QLabel* {
+        QLabel *lbl = new QLabel(text);
+        lbl->setStyleSheet("color: #607d8b; font-size: 11px; background: transparent;");
+        return lbl;
+    };
 
-    // Plot all weather data on the multi-line chart
-    ProbnQuanChartContainer->plotWeatherDataMap(precip_data);
-    ProbnQuanChartContainer->GetChartView()->setRenderHint(QPainter::Antialiasing);
+    // ── Helper: progress bar ───────────────────────────────
+    auto makeBar = [](const QString &color) -> QProgressBar* {
+        QProgressBar *bar = new QProgressBar();
+        bar->setRange(0, 100);
+        bar->setValue(0);
+        bar->setTextVisible(false);
+        bar->setFixedHeight(6);
+        bar->setStyleSheet(QString(R"(
+            QProgressBar {
+                background-color: #2d3139;
+                border: none;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: %1;
+                border-radius: 3px;
+            }
+        )").arg(color));
+        return bar;
+    };
 
-    // Maintain rolling window of 30 cumulative rain data points
-    if (cummulativeRain.count() > 30) cummulativeRain.removeFirst();
+    // ── Helper: indicator dot ──────────────────────────────
+    auto makeDot = [](const QString &color) -> QFrame* {
+        QFrame *dot = new QFrame();
+        dot->setFixedSize(14, 14);
+        dot->setStyleSheet(QString(
+                               "background-color: %1; border-radius: 7px; border: none;"
+                               ).arg(color));
+        return dot;
+    };
 
-    // Calculate and store 2-day cumulative rain forecast
-    cummulativeRain.append({ QDateTime::currentDateTime(),calculateCumulativeValue(rainamountdata,2) });
-    CummulativeForcastChartContainer->plotWeatherData(cummulativeRain, "Cummulative rain forecast [mm]");
+    // ════════════════════════════════════════════════════════
+    //  Build the info panel (left column)
+    // ════════════════════════════════════════════════════════
 
-    // Write weather forecasts to database (server upserts by sensor_id + timestamp)
-    dbWriter.sendWeatherData("precip_amount", "mm", rainamountdata);
-    dbWriter.sendWeatherData("precip_prob", "%", rainprobdata);
-    dbWriter.sendWeatherData("temperature", "C", tempdata);
+    QWidget *infoPanel = new QWidget();
+    infoPanel->setFixedWidth(260);
+    infoPanel->setStyleSheet("background-color: #1a1d23;");
+    QVBoxLayout *infoLayout = new QVBoxLayout(infoPanel);
+    infoLayout->setContentsMargins(8, 8, 8, 8);
+    infoLayout->setSpacing(6);
 
-    // Check distance sensor if enabled
-    double distance;
-    if (checkDistance)
-    {
-        if (!valveOpen) // The depth is found using the release timer if in release mode.
-        {
-            distance = barrelDepth - distancesensor.getDistance();
-            // Cap water depth.
-            if (distance > barrelDepth) distance = barrelDepth;
-            else if (distance < 0) distance = 0;
+    // ── Water Depth card ───────────────────────────────────
+    QGroupBox *depthCard = makeCard("WATER DEPTH", infoPanel);
+    QVBoxLayout *depthLay = new QVBoxLayout(depthCard);
+    depthLay->setSpacing(4);
 
-            qDebug() << "Distance = " << distance << " cm";
-            DistanceLbl->setText(QString::number(distance));
-            dbWriter.sendDepthReading(distance);
-            // Maintain rolling window of 30 depth measurements
-            if (depth.count() > 30) depth.removeFirst();
-            depth.append({ QDateTime::currentDateTime(), distance });
-            WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
+    QHBoxLayout *depthRow = new QHBoxLayout();
+    depthValueLabel = makeBigLabel("--");
+    depthUnitLabel  = makeSmallLabel("cm");
+    depthRow->addWidget(depthValueLabel);
+    depthRow->addWidget(depthUnitLabel);
+    depthRow->addStretch();
+    depthLay->addLayout(depthRow);
+
+    depthBar = makeBar("#26c6da");
+    depthLay->addWidget(depthBar);
+
+    sensorStatusLabel = new QLabel("", depthCard);
+    sensorStatusLabel->setStyleSheet(
+        "color: #ef5350; font-size: 11px; font-weight: bold; background: transparent;");
+    sensorStatusLabel->setWordWrap(true);
+    sensorStatusLabel->hide();
+    depthLay->addWidget(sensorStatusLabel);
+
+    infoLayout->addWidget(depthCard);
+
+    // ── Cumulative Rain card ───────────────────────────────
+    QGroupBox *rainCard = makeCard("CUMULATIVE RAIN (2-DAY)", infoPanel);
+    QVBoxLayout *rainLay = new QVBoxLayout(rainCard);
+    rainLay->setSpacing(4);
+
+    QHBoxLayout *rainRow = new QHBoxLayout();
+    rainValueLabel = makeBigLabel("--");
+    rainUnitLabel  = makeSmallLabel("mm");
+    rainRow->addWidget(rainValueLabel);
+    rainRow->addWidget(rainUnitLabel);
+    rainRow->addStretch();
+    rainLay->addLayout(rainRow);
+
+    rainBar = makeBar("#42a5f5");
+    rainLay->addWidget(rainBar);
+
+    infoLayout->addWidget(rainCard);
+
+    // ── System Mode card ───────────────────────────────────
+    QGroupBox *modeCard = makeCard("SYSTEM MODE", infoPanel);
+    QVBoxLayout *modeLay = new QVBoxLayout(modeCard);
+    modeLay->setSpacing(4);
+
+    QHBoxLayout *modeRow = new QHBoxLayout();
+    modeIndicator  = makeDot("#66bb6a");
+    modeValueLabel = makeBigLabel("MONITORING");
+    modeValueLabel->setFont([]{
+        QFont f; f.setPixelSize(18); f.setBold(true); return f;
+    }());
+    modeRow->addWidget(modeIndicator);
+    modeRow->addSpacing(8);
+    modeRow->addWidget(modeValueLabel);
+    modeRow->addStretch();
+    modeLay->addLayout(modeRow);
+
+    modeReasonLabel = makeSmallLabel("");
+    modeLay->addWidget(modeReasonLabel);
+
+    infoLayout->addWidget(modeCard);
+
+    // ── Valve Status card ──────────────────────────────────
+    QGroupBox *valveCard = makeCard("VALVE", infoPanel);
+    QVBoxLayout *valveLay = new QVBoxLayout(valveCard);
+    valveLay->setSpacing(6);
+
+    QHBoxLayout *valveRow = new QHBoxLayout();
+    valveIndicator  = makeDot("#78909c");
+    valveValueLabel = makeBigLabel("SHUT");
+    valveValueLabel->setFont([]{
+        QFont f; f.setPixelSize(18); f.setBold(true); return f;
+    }());
+    valveRow->addWidget(valveIndicator);
+    valveRow->addSpacing(8);
+    valveRow->addWidget(valveValueLabel);
+    valveRow->addStretch();
+    valveLay->addLayout(valveRow);
+
+    // Auto-control checkbox
+    autoControlCheckBox = new QCheckBox("Auto Control", valveCard);
+    autoControlCheckBox->setChecked(true);
+    autoControlCheckBox->setStyleSheet(R"(
+        QCheckBox {
+            color: #90a4ae;
+            font-size: 12px;
+            spacing: 6px;
+            background: transparent;
+        }
+        QCheckBox::indicator {
+            width: 16px; height: 16px;
+            border-radius: 3px;
+            border: 1px solid #4a5060;
+            background-color: #2b3038;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+        }
+    )");
+    valveLay->addWidget(autoControlCheckBox);
+    connect(autoControlCheckBox, &QCheckBox::toggled,
+            this, &SmartRainHarvest::onAutoControlToggled);
+
+    // Manual button
+    manualButton = new QPushButton("Open Valve", valveCard);
+    manualButton->setMinimumHeight(36);
+    valveLay->addWidget(manualButton);
+    connect(manualButton, &QPushButton::clicked,
+            this, &SmartRainHarvest::onManualOpenShut);
+    updateValveButton();
+
+    infoLayout->addWidget(valveCard);
+
+    // ── Thresholds card ────────────────────────────────────
+    QGroupBox *threshCard = makeCard("THRESHOLDS", infoPanel);
+    QGridLayout *threshGrid = new QGridLayout(threshCard);
+    threshGrid->setSpacing(4);
+
+    auto addThreshRow = [&](int row, const QString &label, const QString &value) {
+        QLabel *l = makeSmallLabel(label);
+        QLabel *v = new QLabel(value);
+        v->setStyleSheet("color: #b0bec5; font-size: 12px; font-weight: bold; background: transparent;");
+        v->setAlignment(Qt::AlignRight);
+        threshGrid->addWidget(l, row, 0);
+        threshGrid->addWidget(v, row, 1);
+        return v;
+    };
+
+    threshOverflowLabel       = addThreshRow(0, "Overflow depth",     QString("%1 cm").arg(overflowThreshold));
+    threshOverflowTargetLabel = addThreshRow(1, "Overflow target",    QString("%1 cm").arg(overflowTargetDepth));
+    threshForecastDepthLabel  = addThreshRow(2, "Forecast min depth", QString("%1 cm").arg(forecastReleaseDepthThreshold));
+    threshForecastRainLabel   = addThreshRow(3, "Forecast min rain",  QString("%1 mm").arg(forecastReleaseThreshold));
+    threshForecastTargetLabel = addThreshRow(4, "Forecast target",    QString("%1 cm").arg(forecastTargetDepth));
+
+    // Separator line
+    QFrame *sep = new QFrame(threshCard);
+    sep->setFrameShape(QFrame::HLine);
+    sep->setStyleSheet("background-color: #2d3139; border: none; max-height: 1px;");
+    threshGrid->addWidget(sep, 5, 0, 1, 2);
+
+    addThreshRow(6, "Monitoring interval", QString("%1 s").arg(monitoringInterval));
+    addThreshRow(7, "Release interval",    QString("%1 s").arg(releaseInterval));
+
+    infoLayout->addWidget(threshCard);
+
+    infoLayout->addStretch();
+
+    // ════════════════════════════════════════════════════════
+    //  Build the charts (right side)
+    // ════════════════════════════════════════════════════════
+
+    QSplitter *vSplitter = new QSplitter(Qt::Vertical);
+    vSplitter->addWidget(weatherChart->GetChartView());
+
+    QSplitter *hSplitter = new QSplitter(Qt::Horizontal, vSplitter);
+    hSplitter->addWidget(cumulativeChart->GetChartView());
+    hSplitter->addWidget(depthChart->GetChartView());
+
+    vSplitter->addWidget(valveChart->GetChartView());
+
+    vSplitter->setStretchFactor(0, 1);
+    vSplitter->setStretchFactor(1, 1);
+    vSplitter->setStretchFactor(2, 1);
+    hSplitter->setStretchFactor(0, 1);
+    hSplitter->setStretchFactor(1, 1);
+
+    // ════════════════════════════════════════════════════════
+    //  Main layout: info panel | charts
+    // ════════════════════════════════════════════════════════
+
+    QWidget *central = new QWidget(this);
+    QHBoxLayout *mainLayout = new QHBoxLayout(central);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+    mainLayout->addWidget(infoPanel);
+    mainLayout->addWidget(vSplitter, 1);
+
+    setCentralWidget(central);
+
+    // Initial state
+    updateInfoPanels();
+    updateModeIndicator();
+}
+
+// ================================================================
+//  UI Updates
+// ================================================================
+
+void SmartRainHarvest::updateInfoPanels()
+{
+    // Depth
+    depthValueLabel->setText(QString::number(lastDepth, 'f', 1));
+    int depthPct = qBound(0, static_cast<int>(lastDepth / barrelDepth * 100), 100);
+    depthBar->setValue(depthPct);
+
+    // Color depth based on danger level
+    if (lastDepth > overflowThreshold)
+        depthValueLabel->setStyleSheet("color: #ef5350; background: transparent;");
+    else if (lastDepth > forecastReleaseDepthThreshold)
+        depthValueLabel->setStyleSheet("color: #ffa726; background: transparent;");
+    else
+        depthValueLabel->setStyleSheet("color: #26c6da; background: transparent;");
+
+    // Rain
+    rainValueLabel->setText(QString::number(lastCumRain, 'f', 1));
+    int rainPct = qBound(0, static_cast<int>(lastCumRain / (forecastReleaseThreshold * 2) * 100), 100);
+    rainBar->setValue(rainPct);
+
+    if (lastCumRain > forecastReleaseThreshold)
+        rainValueLabel->setStyleSheet("color: #42a5f5; background: transparent;");
+    else
+        rainValueLabel->setStyleSheet("color: #eceff1; background: transparent;");
+}
+
+void SmartRainHarvest::updateModeIndicator()
+{
+    if (state == SystemState::Releasing) {
+        modeValueLabel->setText("RELEASING");
+        modeValueLabel->setStyleSheet("color: #ef5350; background: transparent;");
+        modeIndicator->setStyleSheet(
+            "background-color: #ef5350; border-radius: 7px; border: none;");
+
+        if (releaseReason == ReleaseReason::Overflow)
+            modeReasonLabel->setText("Reason: Overflow protection");
+        else
+            modeReasonLabel->setText("Reason: Rain forecast");
+    } else {
+        modeValueLabel->setText("MONITORING");
+        modeValueLabel->setStyleSheet("color: #66bb6a; background: transparent;");
+        modeIndicator->setStyleSheet(
+            "background-color: #66bb6a; border-radius: 7px; border: none;");
+        modeReasonLabel->setText("");
+    }
+
+    // Valve indicator
+    if (valveOpen) {
+        valveValueLabel->setText("OPEN");
+        valveValueLabel->setStyleSheet("color: #ef5350; background: transparent;");
+        valveIndicator->setStyleSheet(
+            "background-color: #ef5350; border-radius: 7px; border: none;");
+    } else {
+        valveValueLabel->setText("SHUT");
+        valveValueLabel->setStyleSheet("color: #66bb6a; background: transparent;");
+        valveIndicator->setStyleSheet(
+            "background-color: #66bb6a; border-radius: 7px; border: none;");
+    }
+}
+
+void SmartRainHarvest::updateValveButton()
+{
+    if (autoControl) {
+        // Auto mode: button is dimmed/disabled-looking
+        manualButton->setText(valveOpen ? "Shut Valve" : "Open Valve");
+        manualButton->setStyleSheet(R"(
+            QPushButton {
+                background-color: #37474f;
+                color: #78909c;
+                border: 1px solid #455a64;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #455a64;
+            }
+        )");
+    } else {
+        // Manual mode: button is bright and active
+        if (valveOpen) {
+            manualButton->setText("Shut Valve");
+            manualButton->setStyleSheet(R"(
+                QPushButton {
+                    background-color: #d32f2f;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #e53935;
+                }
+                QPushButton:pressed {
+                    background-color: #b71c1c;
+                }
+            )");
+        } else {
+            manualButton->setText("Open Valve");
+            manualButton->setStyleSheet(R"(
+                QPushButton {
+                    background-color: #2e7d32;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 13px;
+                }
+                QPushButton:hover {
+                    background-color: #388e3c;
+                }
+                QPushButton:pressed {
+                    background-color: #1b5e20;
+                }
+            )");
+        }
+    }
+}
+
+// ================================================================
+//  State Transitions
+// ================================================================
+
+void SmartRainHarvest::enterMonitoringMode()
+{
+    state = SystemState::Monitoring;
+
+    releaseTimer->stop();
+    monitoringTimer->start(monitoringInterval * 1000);
+
+    depthChart->setAnimated(true);
+    valveChart->setAnimated(true);
+    cumulativeChart->setAnimated(true);
+
+    updateModeIndicator();
+
+    qDebug() << "-> MONITORING mode (interval:"
+             << monitoringInterval << "s)";
+}
+
+void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
+{
+    // Only auto-release if auto control is on
+    if (!autoControl) {
+        qDebug() << "Auto control OFF — skipping release";
+        return;
+    }
+
+    state         = SystemState::Releasing;
+    releaseReason = reason;
+    releaseTarget = target;
+
+    depthChart->setAnimated(false);
+    valveChart->setAnimated(false);
+    cumulativeChart->setAnimated(false);
+
+    openValve();
+    valveOpen = true;
+    recordValveState();
+    dbWriter.sendValveState(true);
+
+    monitoringTimer->stop();
+    releaseTimer->start(releaseInterval * 1000);
+
+    updateModeIndicator();
+    updateValveButton();
+
+    QString reasonStr = (reason == ReleaseReason::Overflow)
+                            ? "OVERFLOW" : "FORECAST";
+    qDebug() << "-> RELEASING mode (" << reasonStr
+             << ") target:" << target << "cm (interval:"
+             << releaseInterval << "s)";
+}
+
+// ================================================================
+//  MONITORING tick
+// ================================================================
+
+void SmartRainHarvest::onMonitoringTick()
+{
+    qDebug() << "-- Monitoring tick --";
+
+    // 1. Fetch weather
+    QVector<WeatherData> rainAmount = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::PrecipitationAmount);
+    QVector<WeatherData> rainProb = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::ProbabilityofPrecipitation);
+    QVector<WeatherData> temp = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::Temperature);
+
+    QMap<QString, QVector<WeatherData>> forecastMap;
+    forecastMap["Precipitation [mm]"]            = rainAmount;
+    forecastMap["Precipitation probability (%)"] = rainProb;
+    forecastMap["Temperature (<sup>o</sup>C)"]   = temp;
+    weatherChart->plotWeatherDataMap(forecastMap);
+    weatherChart->GetChartView()->setRenderHint(QPainter::Antialiasing);
+
+    dbWriter.sendWeatherData("precip_amount", "mm",  rainAmount);
+    dbWriter.sendWeatherData("precip_prob",   "%",   rainProb);
+    dbWriter.sendWeatherData("temperature",   "C",   temp);
+
+    // 2. Cumulative rain
+    lastCumRain = calculateCumulativeValue(rainAmount, 2);
+
+    qDebug() << "Cumulative rain (2-day):" << lastCumRain
+             << "mm from" << rainAmount.size() << "data points";
+
+    if (cumulativeRainHistory.count() > MAX_HISTORY)
+        cumulativeRainHistory.removeFirst();
+    cumulativeRainHistory.append({QDateTime::currentDateTime(), lastCumRain});
+    cumulativeChart->plotWeatherData(cumulativeRainHistory,
+                                     "Cumulative rain forecast [mm]");
+
+    // 3. Measure depth
+    if (!sensorEnabled) {
+        recordValveState();
+        updateInfoPanels();
+        return;
+    }
+
+    lastDepth = measureDepth();
+    recordDepth(lastDepth);
+    dbWriter.sendDepthReading(lastDepth);
+
+    updateInfoPanels();
+
+    // 4. Evaluate rules (only in auto mode)
+    if (autoControl) {
+        // Rule 1: Overflow
+        if (lastDepth > overflowThreshold) {
+            qDebug() << "OVERFLOW: depth" << lastDepth
+                     << ">" << overflowThreshold;
+            enterReleaseMode(ReleaseReason::Overflow, overflowTargetDepth);
+            return;
         }
 
-        // Decision logic: Open valve if depth is high AND rain is forecast
-        if (depth.last().value > forcastReleaseDepthThreshold && cummulativeRain.last().value > forcastReleaseThreshold)
-        {
-            inOverflowMode = false;
-            startRelease();
-        }
-
-        // Decision logic: Open valve if depth exceeds bypass threshold (overflow protection)
-        if (depth.last().value > overflowThreshold)
-        {
-            inOverflowMode = true;
-            startRelease();
+        // Rule 2: Forecast
+        if (lastDepth > forecastReleaseDepthThreshold &&
+            lastCumRain > forecastReleaseThreshold) {
+            qDebug() << "FORECAST RELEASE: depth" << lastDepth
+                     << ">" << forecastReleaseDepthThreshold
+                     << "AND cumRain" << lastCumRain
+                     << ">" << forecastReleaseThreshold;
+            enterReleaseMode(ReleaseReason::Forecast, forecastTargetDepth);
+            return;
         }
     }
 
-
-
-    // Update valve state chart (maintain rolling window of 100 points)
-    if (openShut.count() > 100) openShut.removeFirst();
-    openShut.append({ QDateTime::currentDateTime(), double(int(valveOpen)) });
-    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off)");
-
-    // Update manual button text based on current state
-    if (!valveOpen)
-        ManualOpenShut->setText("Open the Valve");
-    else
-        ManualOpenShut->setText("Shut the Valve");
+    recordValveState();
 }
 
-// Start the water release timer
-void SmartRainHarvest::startRelease()
+// ================================================================
+//  RELEASE tick
+// ================================================================
+
+void SmartRainHarvest::onReleaseTick()
 {
-    ReleaseTimer->start(checkReleaseInterval * 1000);  // Check for target depth on a timer.
-}
+    qDebug() << "-- Release tick --";
 
-// Distance check callback during water release
-void SmartRainHarvest::onCheckDistance()
-{
-    // Measure current water depth
-    double distance = barrelDepth - distancesensor.getDistance();
-    // Cap water depth.
-    if (distance > barrelDepth) distance = barrelDepth;
-    else if (distance < 0) distance = 0;
+    lastDepth = measureDepth();
+    recordDepth(lastDepth);
+    dbWriter.sendDepthReading(lastDepth);
 
-    if (depth.count() > 30) depth.removeFirst();
-    depth.append({ QDateTime::currentDateTime(), distance });
-    WaterDepthChartContainer->plotWeatherData(depth, "Water Depth (cm)");
-
-    // Update valve state chart
-    if (openShut.count() > 100) openShut.removeFirst();
-    openShut.append({ QDateTime::currentDateTime(), double(valveOpen) });
-    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off");
-
-    // Decision logic: Stop release when target depth is reached
-    if (depth.last().value < (inOverflowMode ? overflowReleaseTargetDepth : releaseTargetDepth))
-    {
-        ReleaseTimer->stop();
-        shutTheValve();
+    // Safety: if sensor fails repeatedly during release, shut valve
+    if (sensorFailCount >= MAX_SENSOR_FAILS && state == SystemState::Releasing) {
+        qWarning() << "Sensor failed during release — shutting valve for safety";
+        shutValve();
         valveOpen = false;
+        recordValveState();
+        dbWriter.sendValveState(false);
+        enterMonitoringMode();
+        updateValveButton();
+        return;
     }
-    else
-    {
-        // Continue releasing water
-        openTheValve();
+
+    // Keep cumulative rain chart updating with last known value
+    if (cumulativeRainHistory.count() > MAX_HISTORY)
+        cumulativeRainHistory.removeFirst();
+    cumulativeRainHistory.append({QDateTime::currentDateTime(), lastCumRain});
+    cumulativeChart->setAnimated(false);
+    cumulativeChart->plotWeatherData(cumulativeRainHistory,
+                                     "Cumulative rain forecast [mm]");
+
+    updateInfoPanels();
+
+    if (lastDepth < releaseTarget) {
+        qDebug() << "TARGET REACHED: depth" << lastDepth
+                 << "<" << releaseTarget << " -> shutting valve";
+
+        shutValve();
+        valveOpen = false;
+        recordValveState();
+        dbWriter.sendValveState(false);
+
+        enterMonitoringMode();
+        updateValveButton();
+    } else {
+        qDebug() << "DRAINING: depth" << lastDepth
+                 << " target" << releaseTarget;
+
+        recordValveState();
+        dbWriter.sendValveState(true);
+    }
+}
+
+// ================================================================
+//  Auto Control Toggle
+// ================================================================
+
+void SmartRainHarvest::onAutoControlToggled(bool checked)
+{
+    autoControl = checked;
+
+    if (checked) {
+        qDebug() << "Auto control ENABLED";
+
+        // If valve was manually opened, shut it and reset
+        if (valveOpen && state != SystemState::Releasing) {
+            shutValve();
+            valveOpen = false;
+            recordValveState();
+            dbWriter.sendValveState(false);
+        }
+
+        // Make sure we're in monitoring mode
+        if (state != SystemState::Monitoring)
+            enterMonitoringMode();
+
+        updateModeIndicator();
+    } else {
+        qDebug() << "Auto control DISABLED (manual mode)";
+
+        // If currently releasing, stop
+        if (state == SystemState::Releasing) {
+            shutValve();
+            valveOpen = false;
+            recordValveState();
+            dbWriter.sendValveState(false);
+            enterMonitoringMode();
+        }
+    }
+
+    updateValveButton();
+}
+
+// ================================================================
+//  Manual Override
+// ================================================================
+
+void SmartRainHarvest::onManualOpenShut()
+{
+    // Uncheck auto control
+    autoControlCheckBox->setChecked(false);
+    autoControl = false;
+
+    if (valveOpen) {
+        shutValve();
+        valveOpen = false;
+
+        if (state == SystemState::Releasing)
+            enterMonitoringMode();
+    } else {
+        openValve();
         valveOpen = true;
     }
+
+    recordValveState();
     dbWriter.sendValveState(valveOpen);
+    updateModeIndicator();
+    updateValveButton();
 }
 
-// Open the solenoid valve (GPIO HIGH)
-void SmartRainHarvest::openTheValve() {
+// ================================================================
+//  Depth Measurement
+// ================================================================
+
+double SmartRainHarvest::measureDepth()
+{
+    double raw = distanceSensor.getDistance();
+
+    // Sensor returned error (-1)
+    if (raw < 0) {
+        sensorFailCount++;
+        qWarning() << "Sensor read failed (" << sensorFailCount
+                   << "/" << MAX_SENSOR_FAILS << ")";
+
+        if (sensorFailCount >= MAX_SENSOR_FAILS) {
+            sensorStatusLabel->setText(
+                "⚠ Sensor not connected or malfunctioning");
+            sensorStatusLabel->show();
+            depthValueLabel->setText("--");
+            depthValueLabel->setStyleSheet(
+                "color: #78909c; background: transparent;");
+            depthBar->setValue(0);
+        }
+
+        return lastDepth;  // Return last known good value
+    }
+
+    // Sensor OK — reset fail counter
+    if (sensorFailCount >= MAX_SENSOR_FAILS) {
+        sensorStatusLabel->hide();  // Clear error when sensor recovers
+    }
+    sensorFailCount = 0;
+
+    double depth = barrelDepth - raw;
+
+    if (depth > barrelDepth) depth = barrelDepth;
+    if (depth < 0)           depth = 0;
+
+    qDebug() << "Depth:" << depth << "cm (raw sensor:" << raw << "cm)";
+    return depth;
+}
+
+// ================================================================
+//  Valve Control
+// ================================================================
+
+void SmartRainHarvest::openValve()
+{
 #ifdef RasPi
     digitalWrite(VALVE_PIN, HIGH);
 #endif
-    qDebug() << "The valve is now open";
+    qDebug() << "VALVE OPENED";
 }
 
-// Close the solenoid valve (GPIO LOW)
-void SmartRainHarvest::shutTheValve() {
+void SmartRainHarvest::shutValve()
+{
 #ifdef RasPi
     digitalWrite(VALVE_PIN, LOW);
 #endif
-    qDebug() << "The valve is now shut";
+    qDebug() << "VALVE SHUT";
 }
 
-// Manual valve control button callback
-void SmartRainHarvest::onManualOpenShut()
+// ================================================================
+//  Data Recording
+// ================================================================
+
+void SmartRainHarvest::recordDepth(double depth)
 {
-    // Toggle valve state
-    if (valveOpen)
-    {
-        shutTheValve();
-        valveOpen = false;
-    }
-    else
-    {
-        openTheValve();
-        valveOpen = true;
-    }
-
-    // Update button text
-    if (!valveOpen)
-        ManualOpenShut->setText("Open the Valve");
-    else
-        ManualOpenShut->setText("Shut the Valve");
-
-    // Update valve state chart
-    if (openShut.count() > 100) openShut.removeFirst();
-    openShut.append({ QDateTime::currentDateTime(), double(int(valveOpen)) });
-    OpenShutChartContainer->plotWeatherData(openShut, "Valve State (on/off)");
-    dbWriter.sendValveState(valveOpen);
+    if (depthHistory.count() > MAX_HISTORY)
+        depthHistory.removeFirst();
+    depthHistory.append({QDateTime::currentDateTime(), depth});
+    depthChart->plotWeatherData(depthHistory, "Water Depth (cm)");
 }
 
-
+void SmartRainHarvest::recordValveState()
+{
+    if (valveHistory.count() > MAX_HISTORY)
+        valveHistory.removeFirst();
+    valveHistory.append({QDateTime::currentDateTime(),
+                         static_cast<double>(valveOpen)});
+    valveChart->plotWeatherData(valveHistory, "Valve State (on/off)");
+}

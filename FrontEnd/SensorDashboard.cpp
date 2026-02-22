@@ -354,7 +354,7 @@ SensorChart &SensorDashboard::getOrCreateChart(const QString &sensorId)
         sc.chart->setAnimationOptions(QChart::SeriesAnimations);
         sc.chart->setBackgroundBrush(QBrush(QColor("#21252b")));
         sc.chart->setBackgroundRoundness(10);
-        sc.chart->setMargins(QMargins(12, 8, 12, 8));
+        sc.chart->setMargins(QMargins(12, 8, 12, 4));
         sc.chart->legend()->hide();
 
         // Title
@@ -387,33 +387,27 @@ SensorChart &SensorDashboard::getOrCreateChart(const QString &sensorId)
 
         // ── X axis (time) ──────────────────────────────────────
         sc.axisX = new QDateTimeAxis();
-        sc.axisX->setFormat("MM/dd HH:mm");
-        sc.axisX->setTitleText("Time");
-        sc.axisX->setLabelsAngle(-30);
+        sc.axisX->setFormat("M/dd HH:mm");
+        sc.axisX->setLabelsAngle(0);
+        sc.axisX->setTickCount(5);
         sc.axisX->setGridLineVisible(true);
         sc.axisX->setGridLineColor(QColor("#2d3139"));
         sc.axisX->setLinePenColor(QColor("#3a3f47"));
         sc.axisX->setLabelsColor(QColor("#78909c"));
         QFont axisFont;
-        axisFont.setPixelSize(11);
+        axisFont.setPixelSize(10);
         sc.axisX->setLabelsFont(axisFont);
-        QFont axisTitleFont;
-        axisTitleFont.setPixelSize(12);
-        sc.axisX->setTitleFont(axisTitleFont);
-        sc.axisX->setTitleBrush(QBrush(QColor("#607d8b")));
         sc.chart->addAxis(sc.axisX, Qt::AlignBottom);
         sc.area->attachAxis(sc.axisX);
 
         // ── Y axis (value) ─────────────────────────────────────
         sc.axisY = new QValueAxis();
-        sc.axisY->setTitleText(unitLabel(sensorId));
         sc.axisY->setGridLineVisible(true);
         sc.axisY->setGridLineColor(QColor("#2d3139"));
         sc.axisY->setLinePenColor(QColor("#3a3f47"));
         sc.axisY->setLabelsColor(QColor("#78909c"));
         sc.axisY->setLabelsFont(axisFont);
-        sc.axisY->setTitleFont(axisTitleFont);
-        sc.axisY->setTitleBrush(QBrush(QColor("#607d8b")));
+        sc.axisY->setTickCount(5);
         sc.chart->addAxis(sc.axisY, Qt::AlignLeft);
         sc.area->attachAxis(sc.axisY);
 
@@ -513,15 +507,14 @@ void SensorDashboard::updateChart(const QString &sensorId,
         return;
     }
 
-    // Title
-    sc.chart->setTitle(QString("%1  —  %2 readings")
+    // Title (include unit)
+    QString uLabel = unit.isEmpty() ? unitLabel(sensorId) : unit;
+    sc.chart->setTitle(QString("%1 (%2)  —  %3 readings")
                            .arg(friendlyName(sensorId))
+                           .arg(uLabel)
                            .arg(sc.series->count()));
 
-    // Y axis
-    if (!unit.isEmpty())
-        sc.axisY->setTitleText(unit);
-
+    // Y axis range
     double yMin = minVal;
     double yMax = maxVal;
 

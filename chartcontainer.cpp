@@ -40,7 +40,7 @@ void ChartContainer::plotWeatherData(const QVector<WeatherData>& weatherData, co
     // Add the series to the chart and configure it
     chart->addSeries(series);
     chart->setTitle(yAxisTitle);
-    chart->setAnimationOptions(QChart::SeriesAnimations);
+    chart->setAnimationOptions(animated ? QChart::SeriesAnimations : QChart::NoAnimation);
 
     // Configure X-axis (time axis)
     QDateTimeAxis* axisX = new QDateTimeAxis();
@@ -75,7 +75,7 @@ void ChartContainer::plotWeatherDataMap(const QMap<QString, QVector<WeatherData>
     // Clear existing series and axes
     chart->removeAllSeries();
     removeAllAxes();
-    chart->setAnimationOptions(QChart::SeriesAnimations);
+    chart->setAnimationOptions(animated ? QChart::SeriesAnimations : QChart::NoAnimation);
 
     // Find the time range across all series for a unified X-axis
     QDateTime minTime = QDateTime::currentDateTime();
@@ -165,4 +165,3 @@ void ChartContainer::removeAllAxes() {
         chart->removeAxis(axis);
     }
 }
-

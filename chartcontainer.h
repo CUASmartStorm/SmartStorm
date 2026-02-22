@@ -1,4 +1,3 @@
-
 /////////////////////////////////////////////////////////////
 // CHARTCONTAINER.H - Chart Container Class Header
 /////////////////////////////////////////////////////////////
@@ -32,13 +31,15 @@ public:
     // Getter for the chart view widget
     QChartView* GetChartView() { return chartview; }
 
+    // Enable/disable chart animations (disable for rapid updates)
+    void setAnimated(bool enabled) { animated = enabled; }
+
 private:
     QChart* chart = new QChart();                              // The chart object
     QChartView* chartview = new QChartView();                  // Widget to display the chart
     void removeAllAxes();                                      // Helper to clear all axes
     QVector<QColor> colors;                                    // Color palette for series
+    bool animated = true;                                      // Animation toggle
 };
 
 #endif // CHARTCONTAINER_H
-
-
