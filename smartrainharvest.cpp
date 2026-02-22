@@ -13,7 +13,9 @@
 #include <QSplitter>
 #include <QLabel>
 #include <QPushButton>
+#ifdef RasPi
 #include <wiringPi.h>
+#endif
 
 // Constructor - Initialize the main window and all components
 SmartRainHarvest::SmartRainHarvest(QWidget* parent)
@@ -69,7 +71,9 @@ SmartRainHarvest::SmartRainHarvest(QWidget* parent)
 
     // Initialize distance sensor and valve control pin
     distancesensor.initialize();
+#ifdef RasPi
     pinMode(VALVE_PIN, OUTPUT);  // GPIO 18 for valve control
+#endif
 
     // Run initial weather check
     onCheckTimer();
@@ -200,13 +204,17 @@ void SmartRainHarvest::onCheckDistance()
 
 // Open the solenoid valve (GPIO HIGH)
 void SmartRainHarvest::openTheValve() {
+#ifdef RasPi
     digitalWrite(VALVE_PIN, HIGH);
+#endif
     qDebug() << "The valve is now open";
 }
 
 // Close the solenoid valve (GPIO LOW)
 void SmartRainHarvest::shutTheValve() {
+#ifdef RasPi
     digitalWrite(VALVE_PIN, LOW);
+#endif
     qDebug() << "The valve is now shut";
 }
 

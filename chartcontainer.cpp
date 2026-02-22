@@ -4,7 +4,9 @@
 
 #include "chartcontainer.h"
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 using namespace QtCharts;
+#endif
 
 // Constructor: Initialize with 10 random colors for chart series
 ChartContainer::ChartContainer()

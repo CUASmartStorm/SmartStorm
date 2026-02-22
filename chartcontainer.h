@@ -13,6 +13,10 @@
 
 #include "noaaweatherfetcher.h"
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+using namespace QtCharts;
+#endif
+
 // Class for managing chart visualization of weather data
 class ChartContainer
 {
@@ -26,11 +30,11 @@ public:
     void plotWeatherDataMap(const QMap<QString, QVector<WeatherData>>& weatherDataMap);
 
     // Getter for the chart view widget
-    QtCharts::QChartView* GetChartView() { return chartview; }
+    QChartView* GetChartView() { return chartview; }
 
 private:
-    QtCharts::QChart* chart = new QtCharts::QChart();         // The chart object
-    QtCharts::QChartView* chartview = new QtCharts::QChartView();  // Widget to display the chart
+    QChart* chart = new QChart();                              // The chart object
+    QChartView* chartview = new QChartView();                  // Widget to display the chart
     void removeAllAxes();                                      // Helper to clear all axes
     QVector<QColor> colors;                                    // Color palette for series
 };
