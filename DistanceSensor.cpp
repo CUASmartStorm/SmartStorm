@@ -76,5 +76,5 @@ double DistanceSensor::getDistance() {
 #endif
 
     // Non-RasPi: simulate mid-barrel reading for testing
-    return 50;
+    return 40.0 + (std::rand() % 2000) / 100.0;  // 40.00–59.99 cm
 }
