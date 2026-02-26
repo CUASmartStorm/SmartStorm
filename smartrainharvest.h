@@ -21,6 +21,10 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+//using namespace QtCharts;
+#endif
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class SmartRainHarvest; }
 QT_END_NAMESPACE
@@ -87,7 +91,11 @@ private:
     double        lastCumRain   = 0;
 
     // ── Hardware ───────────────────────────────────────────
-    const int VALVE_PIN = 18;
+    //const int VALVE_PIN = 18;
+    static constexpr int VALVE_OPEN_PIN = 18;
+    static constexpr int VALVE_CLOSE_PIN = 23;
+    static constexpr int VALVE_PULSE_MS = 5000;
+
     DistanceSensor distanceSensor;
     void openValve();
     void shutValve();

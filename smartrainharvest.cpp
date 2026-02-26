@@ -40,9 +40,10 @@ SmartRainHarvest::SmartRainHarvest(QWidget *parent)
     // Hardware
     distanceSensor.initialize();
 #ifdef RasPi
-    pinMode(VALVE_PIN, OUTPUT);
+    pinMode(VALVE_OPEN_PIN, OUTPUT);
+    pinMode(VALVE_CLOSE_PIN, OUTPUT);
 #endif
-
+    //shutValve();
     enterMonitoringMode();
     onMonitoringTick();
 }
@@ -776,7 +777,13 @@ double SmartRainHarvest::measureDepth()
 void SmartRainHarvest::openValve()
 {
 #ifdef RasPi
-    digitalWrite(VALVE_PIN, HIGH);
+   //digitalWrite(VALVE_PIN, HIGH);
+   digitalWrite(VALVE_CLOSE_PIN, LOW);
+   delay(50);
+
+   digitalWrite(VALVE_OPEN_PIN, HIGH);
+   delay(VALVE_PULSE_MS);
+   digitalWrite(VALVE_OPEN_PIN, LOW);
 #endif
     qDebug() << "VALVE OPENED";
 }
@@ -784,7 +791,13 @@ void SmartRainHarvest::openValve()
 void SmartRainHarvest::shutValve()
 {
 #ifdef RasPi
-    digitalWrite(VALVE_PIN, LOW);
+    //digitalWrite(VALVE_PIN, LOW);
+    digitalWrite(VALVE_OPEN_PIN, LOW);
+    delay(50);
+
+    digitalWrite(VALVE_CLOSE_PIN, HIGH);
+    delay(VALVE_PULSE_MS);
+    digitalWrite(VALVE_CLOSE_PIN, LOW);
 #endif
     qDebug() << "VALVE SHUT";
 }
