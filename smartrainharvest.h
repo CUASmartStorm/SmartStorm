@@ -70,8 +70,8 @@ public:
     // The system drains down to overflowTargetDepth.
     double overflowThreshold     = 90;               // cm  — emergency release trigger
     double overflowTargetDepth   = 75;               // cm  — drain-to depth in overflow mode
-    int monitoringInterval  = 10;                    // Interval during closed valve mode (seconds)
-    int releaseInterval     = 5;                     // Interval during open valve mode (seconds)
+    int monitoringInterval  = 1;                    // Interval during closed valve mode (seconds)
+    int releaseInterval     = 1;                     // Interval during open valve mode (seconds)
     bool sensorEnabled      = true;
 
 private slots:

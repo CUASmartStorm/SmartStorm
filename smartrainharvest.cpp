@@ -43,9 +43,13 @@ SmartRainHarvest::SmartRainHarvest(QWidget *parent)
     pinMode(VALVE_OPEN_PIN, OUTPUT);
     pinMode(VALVE_CLOSE_PIN, OUTPUT);
 #endif
-    //shutValve();
+
+
+    shutValve();
     enterMonitoringMode();
-    onMonitoringTick();
+    QTimer::singleShot(0, this, &SmartRainHarvest::onMonitoringTick);
+
+    //onMonitoringTick();
 }
 
 SmartRainHarvest::~SmartRainHarvest()
@@ -513,7 +517,6 @@ void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
     cumulativeChart->setAnimated(false);
 
     openValve();
-    valveOpen = true;
     recordValveState();
     dbWriter.sendValveState(true);
 
@@ -623,7 +626,6 @@ void SmartRainHarvest::onReleaseTick()
     if (sensorFailCount >= MAX_SENSOR_FAILS && state == SystemState::Releasing) {
         qWarning() << "Sensor failed during release — shutting valve for safety";
         shutValve();
-        valveOpen = false;
         recordValveState();
         dbWriter.sendValveState(false);
         enterMonitoringMode();
@@ -646,7 +648,6 @@ void SmartRainHarvest::onReleaseTick()
                  << "<" << releaseTarget << " -> shutting valve";
 
         shutValve();
-        valveOpen = false;
         recordValveState();
         dbWriter.sendValveState(false);
 
@@ -675,7 +676,6 @@ void SmartRainHarvest::onAutoControlToggled(bool checked)
         // If valve was manually opened, shut it and reset
         if (valveOpen && state != SystemState::Releasing) {
             shutValve();
-            valveOpen = false;
             recordValveState();
             dbWriter.sendValveState(false);
         }
@@ -691,7 +691,6 @@ void SmartRainHarvest::onAutoControlToggled(bool checked)
         // If currently releasing, stop
         if (state == SystemState::Releasing) {
             shutValve();
-            valveOpen = false;
             recordValveState();
             dbWriter.sendValveState(false);
             enterMonitoringMode();
@@ -713,13 +712,11 @@ void SmartRainHarvest::onManualOpenShut()
 
     if (valveOpen) {
         shutValve();
-        valveOpen = false;
 
         if (state == SystemState::Releasing)
             enterMonitoringMode();
     } else {
         openValve();
-        valveOpen = true;
     }
 
     recordValveState();
@@ -786,6 +783,8 @@ void SmartRainHarvest::openValve()
    digitalWrite(VALVE_OPEN_PIN, LOW);
 #endif
     qDebug() << "VALVE OPENED";
+
+    valveOpen = true;
 }
 
 void SmartRainHarvest::shutValve()
@@ -794,12 +793,14 @@ void SmartRainHarvest::shutValve()
     //digitalWrite(VALVE_PIN, LOW);
     digitalWrite(VALVE_OPEN_PIN, LOW);
     delay(50);
-
+    digitalWrite(VALVE_CLOSE_PIN, LOW);
     digitalWrite(VALVE_CLOSE_PIN, HIGH);
     delay(VALVE_PULSE_MS);
-    digitalWrite(VALVE_CLOSE_PIN, LOW);
+    //digitalWrite(VALVE_CLOSE_PIN, LOW);
 #endif
     qDebug() << "VALVE SHUT";
+
+    valveOpen = false;
 }
 
 // ================================================================
