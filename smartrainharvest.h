@@ -9,6 +9,7 @@
 #include "noaaweatherfetcher.h"
 #include "chartcontainer.h"
 #include "DistanceSensor.h"
+#include "MoistureSensor.h"
 #include "DatabaseWriter.h"
 #include <QTimer>
 #include <QPushButton>
@@ -88,6 +89,7 @@ private:
     bool          autoControl   = true;
     double        releaseTarget = 0;
     double        lastDepth     = 0;
+    double        lastMoisture  = 0;
     double        lastCumRain   = 0;
 
     // ── Hardware ───────────────────────────────────────────
@@ -100,10 +102,15 @@ private:
     void openValve();
     void shutValve();
 
+    MoistureSensor moistureSensor;
+
     // ── Depth measurement ──────────────────────────────────
     double measureDepth();
     int sensorFailCount = 0;           // Consecutive failed readings
     static const int MAX_SENSOR_FAILS = 3;  // Show error after this many
+
+    // ── Soil moisture measurement ─────────────────────────-
+    double measureMoisture();
 
     // ── State transitions ──────────────────────────────────
     void enterReleaseMode(ReleaseReason reason, double target);

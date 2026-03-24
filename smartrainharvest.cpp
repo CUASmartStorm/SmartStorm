@@ -39,6 +39,7 @@ SmartRainHarvest::SmartRainHarvest(QWidget *parent)
 
     // Hardware
     distanceSensor.initialize();
+    moistureSensor.initialize();
 #ifdef RasPi
     pinMode(VALVE_OPEN_PIN, OUTPUT);
     pinMode(VALVE_CLOSE_PIN, OUTPUT);
@@ -583,6 +584,8 @@ void SmartRainHarvest::onMonitoringTick()
     recordDepth(lastDepth);
     dbWriter.sendDepthReading(lastDepth);
 
+    lastMoisture = measureMoisture();
+
     updateInfoPanels();
 
     // 4. Evaluate rules (only in auto mode)
@@ -621,6 +624,8 @@ void SmartRainHarvest::onReleaseTick()
     lastDepth = measureDepth();
     recordDepth(lastDepth);
     dbWriter.sendDepthReading(lastDepth);
+
+    lastMoisture = measureMoisture();
 
     // Safety: if sensor fails repeatedly during release, shut valve
     if (sensorFailCount >= MAX_SENSOR_FAILS && state == SystemState::Releasing) {
@@ -765,6 +770,15 @@ double SmartRainHarvest::measureDepth()
 
     qDebug() << "Depth:" << depth << "cm (raw sensor:" << raw << "cm)";
     return depth;
+}
+
+double SmartRainHarvest::measureMoisture()
+{
+    double raw = moistureSensor.getMoisture();
+
+    double moisture = raw;
+
+    return moisture;
 }
 
 // ================================================================

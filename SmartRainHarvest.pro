@@ -16,6 +16,7 @@ DEFINES += Qt5
 SOURCES += \
     DatabaseWriter.cpp \
     DistanceSensor.cpp \
+    MoistureSensor.cpp \
     chartcontainer.cpp \
     main.cpp \
     noaaweatherfetcher.cpp \
@@ -24,6 +25,7 @@ SOURCES += \
 HEADERS += \
     DatabaseWriter.h \
     DistanceSensor.h \
+    MoistureSensor.h \
     chartcontainer.h \
     noaaweatherfetcher.h \
     smartrainharvest.h
