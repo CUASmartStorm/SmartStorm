@@ -5,6 +5,7 @@
 #include "MoistureSensor.h"
 #include <cmath>
 
+
 MoistureSensor::MoistureSensor() {
 }
 
@@ -57,11 +58,14 @@ double MoistureSensor::getMoisture() {
     //    double moisture = rawToMoisturePercent(raw);
     //}
 
-    int raw = readChannel(0);
+    int raw = readChannel(7);
     double moisture = rawToMoisturePercent(raw);
 
+    qDebug() << "Moisture :"
+             << moisture;
 
-    return std::round(0.0 * 100.0) / 100.0;
+
+    return std::round(moisture);
 #endif
 
     // Non-RasPi: simulate mid-barrel reading for testing

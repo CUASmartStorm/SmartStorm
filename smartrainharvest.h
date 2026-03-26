@@ -55,7 +55,7 @@ public:
     // Physical distance from the ultrasonic sensor (mounted at top)
     // to the bottom of the barrel. All depth readings are calculated
     // as: depth = barrelDepth − sensorReading
-    double barrelDepth = 100;                        // cm
+    double barrelDepth = 100;                        // cm   
 
     // Forecast-based release triggers when BOTH conditions are met:
     //   1. Current water depth  >  forecastReleaseDepthThreshold
@@ -128,6 +128,7 @@ private:
     // ── Data history ───────────────────────────────────────
     QVector<WeatherData> cumulativeRainHistory;
     QVector<WeatherData> depthHistory;
+    QVector<WeatherData> moistureHistory;
     QVector<WeatherData> valveHistory;
     static const int MAX_HISTORY = 100;
 
@@ -145,6 +146,7 @@ private:
     ChartContainer *weatherChart    = new ChartContainer();
     ChartContainer *cumulativeChart = new ChartContainer();
     ChartContainer *depthChart      = new ChartContainer();
+    ChartContainer *moistureChart      = new ChartContainer();
     ChartContainer *valveChart      = new ChartContainer();
 
     // ── Info panel labels ──────────────────────────────────
@@ -152,6 +154,11 @@ private:
     QLabel *depthUnitLabel;
     QLabel *sensorStatusLabel;
     QProgressBar *depthBar;
+
+    QLabel *moistureValueLabel;
+    QLabel *moistureUnitLabel;
+    QLabel *moistureStatusLabel;
+    QProgressBar *moistureBar;
 
     QLabel *rainValueLabel;
     QLabel *rainUnitLabel;

@@ -193,6 +193,31 @@ void SmartRainHarvest::setupDashboard()
 
     infoLayout->addWidget(depthCard);
 
+    // ── Soil Moisture card ───────────────────────────────────
+    QGroupBox *moistureCard = makeCard("SOIL MOISTURE", infoPanel);
+    QVBoxLayout *moistureLay = new QVBoxLayout(moistureCard);
+    moistureLay->setSpacing(4);
+
+    QHBoxLayout *moistureRow = new QHBoxLayout();
+    moistureValueLabel = makeBigLabel("--");
+    moistureUnitLabel  = makeSmallLabel("%");
+    moistureRow->addWidget(moistureValueLabel);
+    moistureRow->addWidget(moistureUnitLabel);
+    moistureRow->addStretch();
+    moistureLay->addLayout(moistureRow);
+
+    moistureBar = makeBar("#26c6da");
+    moistureLay->addWidget(moistureBar);
+
+    moistureStatusLabel = new QLabel("", moistureCard);
+    moistureStatusLabel->setStyleSheet(
+        "color: #ef5350; font-size: 11px; font-weight: bold; background: transparent;");
+    moistureStatusLabel->setWordWrap(true);
+    moistureStatusLabel->hide();
+    moistureLay->addWidget(moistureStatusLabel);
+
+    infoLayout->addWidget(moistureCard);
+
     // ── Cumulative Rain card ───────────────────────────────
     QGroupBox *rainCard = makeCard("CUMULATIVE RAIN (2-DAY)", infoPanel);
     QVBoxLayout *rainLay = new QVBoxLayout(rainCard);
@@ -366,6 +391,11 @@ void SmartRainHarvest::updateInfoPanels()
     depthValueLabel->setText(QString::number(lastDepth, 'f', 1));
     int depthPct = qBound(0, static_cast<int>(lastDepth / barrelDepth * 100), 100);
     depthBar->setValue(depthPct);
+
+    // Moisture
+    moistureValueLabel->setText(QString::number(lastMoisture, 'f', 1));
+    int moisturePct = qBound(0, static_cast<int>(lastMoisture), 100);
+    moistureBar->setValue(moisturePct);
 
     // Color depth based on danger level
     if (lastDepth > overflowThreshold)
