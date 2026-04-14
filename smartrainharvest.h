@@ -39,7 +39,8 @@ enum class SystemState {
 enum class ReleaseReason {
     None,
     Overflow,
-    Forecast
+    Forecast,
+    Dry
 };
 
 class SmartRainHarvest : public QMainWindow
@@ -64,12 +65,15 @@ public:
     double forecastReleaseDepthThreshold = 20;       // cm  — min water level to consider draining
     double forecastReleaseThreshold      = 15;       // mm  — min predicted rain (2-day sum)
     double forecastTargetDepth           = 5;        // cm  — drain-to depth in forecast mode
+    double moistureThreshold             = 20;      // %  — minimum soil moisture to consider draining
+    double moistureTargetDepth           = 75;        // cm  — drain-to depth in dry soil
 
     // Overflow protection triggers when:
     //   Current water depth  >  overflowThreshold
     // This fires regardless of the rain forecast (safety mechanism).
     // The system drains down to overflowTargetDepth.
     double overflowThreshold     = 90;               // cm  — emergency release trigger
+    double emptyThreshold     = 10;                 // cm  — point at which the barrel is empty.
     double overflowTargetDepth   = 75;               // cm  — drain-to depth in overflow mode
     int monitoringInterval  = 1;                    // Interval during closed valve mode (seconds)
     int releaseInterval     = 1;                     // Interval during open valve mode (seconds)
@@ -80,6 +84,7 @@ private slots:
     void onReleaseTick();
     void onManualOpenShut();
     void onAutoControlToggled(bool checked);
+    bool checkIfShouldRelease();
 
 private:
     // ── State ──────────────────────────────────────────────
@@ -112,9 +117,13 @@ private:
     // ── Soil moisture measurement ─────────────────────────-
     double measureMoisture();
 
+
+
     // ── State transitions ──────────────────────────────────
     void enterReleaseMode(ReleaseReason reason, double target);
     void enterMonitoringMode();
+
+
 
     // ── Timers ─────────────────────────────────────────────
     QTimer *monitoringTimer;
@@ -133,6 +142,7 @@ private:
     static const int MAX_HISTORY = 100;
 
     void recordDepth(double depth);
+    void recordMoisture(double moisture);
     void recordValveState();
 
     // ── UI setup ───────────────────────────────────────────
@@ -177,6 +187,8 @@ private:
     QLabel *threshForecastRainLabel;
     QLabel *threshOverflowTargetLabel;
     QLabel *threshForecastTargetLabel;
+    QLabel *threshmoistureLabel;
+    QLabel *threshMoistureTargetLabel;
 
     // ── Controls ───────────────────────────────────────────
     QPushButton *manualButton;

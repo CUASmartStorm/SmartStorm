@@ -43,9 +43,30 @@ int MoistureSensor::readChannel(int channel) {
 
 double MoistureSensor::rawToMoisturePercent(int raw) {
 
-    const int DRY = 580;
-    const int WET = 280;
+
+    // 0 - 1023.
+
+    // Soil moisture levels: 20% - 30%.
+    // = 204.8 - 307.2
+
+
+    const int DRY = 645;
+    const int WET = 160;
+
+    //const int DRY = 204.8;
+    //const int WET = 307.2;
+
+
+    //const int DRY = 1000;
+    //const int WET = 400;
+
+    //const int DRY = 580;
+    //const int WET = 280;
     double pct = 100.0 * (DRY - raw) / (DRY - WET);
+
+    // Test multiplying moisture value.
+    //pct *= 10000.0f;
+    //pct *= 0.1f;
 
     return qBound(0.0, pct, 100.0);
 }
@@ -60,6 +81,8 @@ double MoistureSensor::getMoisture() {
 
     int raw = readChannel(7);
     double moisture = rawToMoisturePercent(raw);
+
+    //double moisture = raw;
 
     qDebug() << "Moisture :"
              << moisture;

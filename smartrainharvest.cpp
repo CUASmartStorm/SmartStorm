@@ -46,9 +46,11 @@ SmartRainHarvest::SmartRainHarvest(QWidget *parent)
 #endif
 
 
+
     shutValve();
     enterMonitoringMode();
     QTimer::singleShot(0, this, &SmartRainHarvest::onMonitoringTick);
+
 
     //onMonitoringTick();
 }
@@ -88,8 +90,8 @@ void SmartRainHarvest::setupDashboard()
                 background-color: #21252b;
                 border: 1px solid #2d3139;
                 border-radius: 8px;
-                margin-top: 12px;
-                padding-top: 18px;
+                margin-top: 10px;
+                padding-top: 10px;
                 padding-left: 10px;
                 padding-right: 10px;
                 padding-bottom: 6px;
@@ -166,12 +168,12 @@ void SmartRainHarvest::setupDashboard()
     infoPanel->setStyleSheet("background-color: #1a1d23;");
     QVBoxLayout *infoLayout = new QVBoxLayout(infoPanel);
     infoLayout->setContentsMargins(8, 8, 8, 8);
-    infoLayout->setSpacing(6);
+    infoLayout->setSpacing(0);
 
     // ── Water Depth card ───────────────────────────────────
     QGroupBox *depthCard = makeCard("WATER DEPTH", infoPanel);
     QVBoxLayout *depthLay = new QVBoxLayout(depthCard);
-    depthLay->setSpacing(4);
+    depthLay->setSpacing(0);
 
     QHBoxLayout *depthRow = new QHBoxLayout();
     depthValueLabel = makeBigLabel("--");
@@ -196,7 +198,7 @@ void SmartRainHarvest::setupDashboard()
     // ── Soil Moisture card ───────────────────────────────────
     QGroupBox *moistureCard = makeCard("SOIL MOISTURE", infoPanel);
     QVBoxLayout *moistureLay = new QVBoxLayout(moistureCard);
-    moistureLay->setSpacing(4);
+    moistureLay->setSpacing(0);
 
     QHBoxLayout *moistureRow = new QHBoxLayout();
     moistureValueLabel = makeBigLabel("--");
@@ -221,7 +223,7 @@ void SmartRainHarvest::setupDashboard()
     // ── Cumulative Rain card ───────────────────────────────
     QGroupBox *rainCard = makeCard("CUMULATIVE RAIN (2-DAY)", infoPanel);
     QVBoxLayout *rainLay = new QVBoxLayout(rainCard);
-    rainLay->setSpacing(4);
+    rainLay->setSpacing(0);
 
     QHBoxLayout *rainRow = new QHBoxLayout();
     rainValueLabel = makeBigLabel("--");
@@ -239,7 +241,7 @@ void SmartRainHarvest::setupDashboard()
     // ── System Mode card ───────────────────────────────────
     QGroupBox *modeCard = makeCard("SYSTEM MODE", infoPanel);
     QVBoxLayout *modeLay = new QVBoxLayout(modeCard);
-    modeLay->setSpacing(4);
+    modeLay->setSpacing(0);
 
     QHBoxLayout *modeRow = new QHBoxLayout();
     modeIndicator  = makeDot("#66bb6a");
@@ -248,7 +250,7 @@ void SmartRainHarvest::setupDashboard()
         QFont f; f.setPixelSize(18); f.setBold(true); return f;
     }());
     modeRow->addWidget(modeIndicator);
-    modeRow->addSpacing(8);
+    modeRow->addSpacing(0);
     modeRow->addWidget(modeValueLabel);
     modeRow->addStretch();
     modeLay->addLayout(modeRow);
@@ -261,7 +263,7 @@ void SmartRainHarvest::setupDashboard()
     // ── Valve Status card ──────────────────────────────────
     QGroupBox *valveCard = makeCard("VALVE", infoPanel);
     QVBoxLayout *valveLay = new QVBoxLayout(valveCard);
-    valveLay->setSpacing(6);
+    valveLay->setSpacing(0);
 
     QHBoxLayout *valveRow = new QHBoxLayout();
     valveIndicator  = makeDot("#78909c");
@@ -270,7 +272,7 @@ void SmartRainHarvest::setupDashboard()
         QFont f; f.setPixelSize(18); f.setBold(true); return f;
     }());
     valveRow->addWidget(valveIndicator);
-    valveRow->addSpacing(8);
+    valveRow->addSpacing(0);
     valveRow->addWidget(valveValueLabel);
     valveRow->addStretch();
     valveLay->addLayout(valveRow);
@@ -313,7 +315,7 @@ void SmartRainHarvest::setupDashboard()
     // ── Thresholds card ────────────────────────────────────
     QGroupBox *threshCard = makeCard("THRESHOLDS", infoPanel);
     QGridLayout *threshGrid = new QGridLayout(threshCard);
-    threshGrid->setSpacing(4);
+    threshGrid->setSpacing(0);
 
     auto addThreshRow = [&](int row, const QString &label, const QString &value) {
         QLabel *l = makeSmallLabel(label);
@@ -330,15 +332,20 @@ void SmartRainHarvest::setupDashboard()
     threshForecastDepthLabel  = addThreshRow(2, "Forecast min depth", QString("%1 cm").arg(forecastReleaseDepthThreshold));
     threshForecastRainLabel   = addThreshRow(3, "Forecast min rain",  QString("%1 mm").arg(forecastReleaseThreshold));
     threshForecastTargetLabel = addThreshRow(4, "Forecast target",    QString("%1 cm").arg(forecastTargetDepth));
+    threshmoistureLabel       = addThreshRow(5, "Moisture threshold",    QString("%1 %").arg(moistureThreshold));
+    threshMoistureTargetLabel = addThreshRow(6, "Moisture target",    QString("%1 cm").arg(moistureTargetDepth));
+
+
+
 
     // Separator line
     QFrame *sep = new QFrame(threshCard);
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet("background-color: #2d3139; border: none; max-height: 1px;");
-    threshGrid->addWidget(sep, 5, 0, 1, 2);
+    threshGrid->addWidget(sep, 7, 0, 1, 2);
 
-    addThreshRow(6, "Monitoring interval", QString("%1 s").arg(monitoringInterval));
-    addThreshRow(7, "Release interval",    QString("%1 s").arg(releaseInterval));
+    addThreshRow(8, "Monitoring interval", QString("%1 s").arg(monitoringInterval));
+    addThreshRow(9, "Release interval",    QString("%1 s").arg(releaseInterval));
 
     infoLayout->addWidget(threshCard);
 
@@ -351,17 +358,23 @@ void SmartRainHarvest::setupDashboard()
     QSplitter *vSplitter = new QSplitter(Qt::Vertical);
     vSplitter->addWidget(weatherChart->GetChartView());
 
-    QSplitter *hSplitter = new QSplitter(Qt::Horizontal, vSplitter);
-    hSplitter->addWidget(cumulativeChart->GetChartView());
-    hSplitter->addWidget(depthChart->GetChartView());
+    QSplitter *hSplitterMiddle = new QSplitter(Qt::Horizontal, vSplitter);
+    hSplitterMiddle->addWidget(cumulativeChart->GetChartView());
+    hSplitterMiddle->addWidget(depthChart->GetChartView());
 
-    vSplitter->addWidget(valveChart->GetChartView());
+    QSplitter *hSplitterBottom = new QSplitter(Qt::Horizontal, vSplitter);
+    hSplitterBottom->addWidget(moistureChart->GetChartView());
+    hSplitterBottom->addWidget(valveChart->GetChartView());
+
+    //vSplitter->addWidget(valveChart->GetChartView());
 
     vSplitter->setStretchFactor(0, 1);
     vSplitter->setStretchFactor(1, 1);
     vSplitter->setStretchFactor(2, 1);
-    hSplitter->setStretchFactor(0, 1);
-    hSplitter->setStretchFactor(1, 1);
+    hSplitterMiddle->setStretchFactor(0, 1);
+    hSplitterMiddle->setStretchFactor(1, 1);
+    hSplitterBottom->setStretchFactor(0, 1);
+    hSplitterBottom->setStretchFactor(1, 1);
 
     // ════════════════════════════════════════════════════════
     //  Main layout: info panel | charts
@@ -405,6 +418,14 @@ void SmartRainHarvest::updateInfoPanels()
     else
         depthValueLabel->setStyleSheet("color: #26c6da; background: transparent;");
 
+    // Color moisture based on danger level
+    if (lastMoisture < moistureThreshold)
+        moistureValueLabel->setStyleSheet("color: #ef5350; background: transparent;");
+    else
+        moistureValueLabel->setStyleSheet("color: #26c6da; background: transparent;");
+
+
+
     // Rain
     rainValueLabel->setText(QString::number(lastCumRain, 'f', 1));
     int rainPct = qBound(0, static_cast<int>(lastCumRain / (forecastReleaseThreshold * 2) * 100), 100);
@@ -426,6 +447,8 @@ void SmartRainHarvest::updateModeIndicator()
 
         if (releaseReason == ReleaseReason::Overflow)
             modeReasonLabel->setText("Reason: Overflow protection");
+        else if (releaseReason == ReleaseReason::Dry)
+            modeReasonLabel->setText("Reason: Dry soil");
         else
             modeReasonLabel->setText("Reason: Rain forecast");
     } else {
@@ -524,6 +547,7 @@ void SmartRainHarvest::enterMonitoringMode()
     depthChart->setAnimated(true);
     valveChart->setAnimated(true);
     cumulativeChart->setAnimated(true);
+    moistureChart->setAnimated(true);
 
     updateModeIndicator();
 
@@ -546,6 +570,7 @@ void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
     depthChart->setAnimated(false);
     valveChart->setAnimated(false);
     cumulativeChart->setAnimated(false);
+    moistureChart->setAnimated(false);
 
     openValve();
     recordValveState();
@@ -572,73 +597,16 @@ void SmartRainHarvest::onMonitoringTick()
 {
     qDebug() << "-- Monitoring tick --";
 
-    // 1. Fetch weather
-    QVector<WeatherData> rainAmount = fetcher.getWeatherPrediction(
-        gridX, gridY, datatype::PrecipitationAmount);
-    QVector<WeatherData> rainProb = fetcher.getWeatherPrediction(
-        gridX, gridY, datatype::ProbabilityofPrecipitation);
-    QVector<WeatherData> temp = fetcher.getWeatherPrediction(
-        gridX, gridY, datatype::Temperature);
 
-    QMap<QString, QVector<WeatherData>> forecastMap;
-    forecastMap["Precipitation [mm]"]            = rainAmount;
-    forecastMap["Precipitation probability (%)"] = rainProb;
-    forecastMap["Temperature (<sup>o</sup>C)"]   = temp;
-    weatherChart->plotWeatherDataMap(forecastMap);
-    weatherChart->GetChartView()->setRenderHint(QPainter::Antialiasing);
-
-    dbWriter.sendWeatherData("precip_amount", "mm",  rainAmount);
-    dbWriter.sendWeatherData("precip_prob",   "%",   rainProb);
-    dbWriter.sendWeatherData("temperature",   "C",   temp);
-
-    // 2. Cumulative rain
-    lastCumRain = calculateCumulativeValue(rainAmount, 2);
-
-    qDebug() << "Cumulative rain (2-day):" << lastCumRain
-             << "mm from" << rainAmount.size() << "data points";
-
-    if (cumulativeRainHistory.count() > MAX_HISTORY)
-        cumulativeRainHistory.removeFirst();
-    cumulativeRainHistory.append({QDateTime::currentDateTime(), lastCumRain});
-    cumulativeChart->plotWeatherData(cumulativeRainHistory,
-                                     "Cumulative rain forecast [mm]");
-
-    // 3. Measure depth
-    if (!sensorEnabled) {
-        recordValveState();
-        updateInfoPanels();
-        return;
-    }
-
-    lastDepth = measureDepth();
-    recordDepth(lastDepth);
-    dbWriter.sendDepthReading(lastDepth);
-
-    lastMoisture = measureMoisture();
-
-    updateInfoPanels();
-
-    // 4. Evaluate rules (only in auto mode)
-    if (autoControl) {
-        // Rule 1: Overflow
-        if (lastDepth > overflowThreshold) {
-            qDebug() << "OVERFLOW: depth" << lastDepth
-                     << ">" << overflowThreshold;
-            enterReleaseMode(ReleaseReason::Overflow, overflowTargetDepth);
-            return;
-        }
-
-        // Rule 2: Forecast
-        if (lastDepth > forecastReleaseDepthThreshold &&
-            lastCumRain > forecastReleaseThreshold) {
-            qDebug() << "FORECAST RELEASE: depth" << lastDepth
-                     << ">" << forecastReleaseDepthThreshold
-                     << "AND cumRain" << lastCumRain
-                     << ">" << forecastReleaseThreshold;
-            enterReleaseMode(ReleaseReason::Forecast, forecastTargetDepth);
+    if (autoControl)
+    {
+        if (checkIfShouldRelease()) // Enter release mode if conditions are met.
+        {
+            enterReleaseMode(ReleaseReason::Dry, moistureTargetDepth);
             return;
         }
     }
+
 
     recordValveState();
 }
@@ -651,34 +619,10 @@ void SmartRainHarvest::onReleaseTick()
 {
     qDebug() << "-- Release tick --";
 
-    lastDepth = measureDepth();
-    recordDepth(lastDepth);
-    dbWriter.sendDepthReading(lastDepth);
 
-    lastMoisture = measureMoisture();
 
-    // Safety: if sensor fails repeatedly during release, shut valve
-    if (sensorFailCount >= MAX_SENSOR_FAILS && state == SystemState::Releasing) {
-        qWarning() << "Sensor failed during release — shutting valve for safety";
-        shutValve();
-        recordValveState();
-        dbWriter.sendValveState(false);
-        enterMonitoringMode();
-        updateValveButton();
-        return;
-    }
-
-    // Keep cumulative rain chart updating with last known value
-    if (cumulativeRainHistory.count() > MAX_HISTORY)
-        cumulativeRainHistory.removeFirst();
-    cumulativeRainHistory.append({QDateTime::currentDateTime(), lastCumRain});
-    cumulativeChart->setAnimated(false);
-    cumulativeChart->plotWeatherData(cumulativeRainHistory,
-                                     "Cumulative rain forecast [mm]");
-
-    updateInfoPanels();
-
-    if (lastDepth < releaseTarget) {
+    if (!checkIfShouldRelease()) // Enter monitoring mode if conditions are met.
+    {
         qDebug() << "TARGET REACHED: depth" << lastDepth
                  << "<" << releaseTarget << " -> shutting valve";
 
@@ -688,7 +632,9 @@ void SmartRainHarvest::onReleaseTick()
 
         enterMonitoringMode();
         updateValveButton();
-    } else {
+    }
+    else
+    {
         qDebug() << "DRAINING: depth" << lastDepth
                  << " target" << releaseTarget;
 
@@ -811,6 +757,8 @@ double SmartRainHarvest::measureMoisture()
     return moisture;
 }
 
+
+
 // ================================================================
 //  Valve Control
 // ================================================================
@@ -866,4 +814,85 @@ void SmartRainHarvest::recordValveState()
     valveHistory.append({QDateTime::currentDateTime(),
                          static_cast<double>(valveOpen)});
     valveChart->plotWeatherData(valveHistory, "Valve State (on/off)");
+}
+
+void SmartRainHarvest::recordMoisture(double moisture)
+{
+    if (moistureHistory.count() > MAX_HISTORY)
+        moistureHistory.removeFirst();
+    moistureHistory.append({QDateTime::currentDateTime(), moisture});
+    moistureChart->plotWeatherData(moistureHistory, "Moisture Level (%)");
+}
+
+
+
+bool SmartRainHarvest::checkIfShouldRelease()
+{
+    // Check states.
+    lastDepth = measureDepth();
+    recordDepth(lastDepth);
+    dbWriter.sendDepthReading(lastDepth);
+
+    lastMoisture = measureMoisture();
+    recordMoisture(lastMoisture);
+    //dbWriter.sendMoistureReading(lastMoisture);
+
+
+    // 1. Fetch weather
+    QVector<WeatherData> rainAmount = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::PrecipitationAmount);
+    QVector<WeatherData> rainProb = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::ProbabilityofPrecipitation);
+    QVector<WeatherData> temp = fetcher.getWeatherPrediction(
+        gridX, gridY, datatype::Temperature);
+
+    QMap<QString, QVector<WeatherData>> forecastMap;
+    forecastMap["Precipitation [mm]"]            = rainAmount;
+    forecastMap["Precipitation probability (%)"] = rainProb;
+    forecastMap["Temperature (<sup>o</sup>C)"]   = temp;
+    weatherChart->plotWeatherDataMap(forecastMap);
+    weatherChart->GetChartView()->setRenderHint(QPainter::Antialiasing);
+
+    dbWriter.sendWeatherData("precip_amount", "mm",  rainAmount);
+    dbWriter.sendWeatherData("precip_prob",   "%",   rainProb);
+    dbWriter.sendWeatherData("temperature",   "C",   temp);
+
+    // 2. Cumulative rain
+    lastCumRain = calculateCumulativeValue(rainAmount, 2);
+
+    qDebug() << "Cumulative rain (2-day):" << lastCumRain
+             << "mm from" << rainAmount.size() << "data points";
+
+
+
+    // Keep cumulative rain chart updating with last known value
+    if (cumulativeRainHistory.count() > MAX_HISTORY)
+        cumulativeRainHistory.removeFirst();
+    cumulativeRainHistory.append({QDateTime::currentDateTime(), lastCumRain});
+    //cumulativeChart->setAnimated(false);
+    cumulativeChart->plotWeatherData(cumulativeRainHistory,
+                                     "Cumulative rain forecast [mm]");
+
+
+
+    // Safety: if sensor fails repeatedly during release, shut valve
+    if (sensorFailCount >= MAX_SENSOR_FAILS && state == SystemState::Releasing) {
+        qWarning() << "Sensor failed during release — shutting valve for safety";
+        shutValve();
+        recordValveState();
+        dbWriter.sendValveState(false);
+        enterMonitoringMode();
+        updateValveButton();
+        return false;
+    }
+
+
+    updateInfoPanels();
+
+
+
+    // Decide state.
+    return (!(lastDepth < emptyThreshold || lastMoisture > moistureThreshold || lastCumRain > forecastReleaseThreshold )
+            || lastDepth > overflowThreshold); // Release
+
 }
