@@ -48,6 +48,12 @@ void DatabaseWriter::sendDepthReading(double depthCm)
     sendReading("depth_sensor", depthCm, "cm");
 }
 
+// Convenience: send a moisture sensor reading with current timestamp
+void DatabaseWriter::sendMoistureReading(double moist)
+{
+    sendReading("moisture_sensor", moist, "%");
+}
+
 // Convenience: send valve state with current timestamp
 void DatabaseWriter::sendValveState(bool open)
 {

@@ -328,24 +328,19 @@ void SmartRainHarvest::setupDashboard()
     };
 
     threshOverflowLabel       = addThreshRow(0, "Overflow depth",     QString("%1 cm").arg(overflowThreshold));
-    threshOverflowTargetLabel = addThreshRow(1, "Overflow target",    QString("%1 cm").arg(overflowTargetDepth));
-    threshForecastDepthLabel  = addThreshRow(2, "Forecast min depth", QString("%1 cm").arg(forecastReleaseDepthThreshold));
-    threshForecastRainLabel   = addThreshRow(3, "Forecast min rain",  QString("%1 mm").arg(forecastReleaseThreshold));
-    threshForecastTargetLabel = addThreshRow(4, "Forecast target",    QString("%1 cm").arg(forecastTargetDepth));
-    threshmoistureLabel       = addThreshRow(5, "Moisture threshold",    QString("%1 %").arg(moistureThreshold));
-    threshMoistureTargetLabel = addThreshRow(6, "Moisture target",    QString("%1 cm").arg(moistureTargetDepth));
-
-
+    threshEmptyLabel       = addThreshRow(1, "Empty depth",     QString("%1 cm").arg(emptyThreshold));
+    threshForecastRainLabel   = addThreshRow(2, "Forecast min rain",  QString("%1 mm").arg(forecastThreshold));
+    threshmoistureLabel       = addThreshRow(3, "Moisture threshold",    QString("%1 %").arg(moistureThreshold));
 
 
     // Separator line
     QFrame *sep = new QFrame(threshCard);
     sep->setFrameShape(QFrame::HLine);
     sep->setStyleSheet("background-color: #2d3139; border: none; max-height: 1px;");
-    threshGrid->addWidget(sep, 7, 0, 1, 2);
+    threshGrid->addWidget(sep, 4, 0, 1, 2);
 
-    addThreshRow(8, "Monitoring interval", QString("%1 s").arg(monitoringInterval));
-    addThreshRow(9, "Release interval",    QString("%1 s").arg(releaseInterval));
+    addThreshRow(5, "Monitoring interval", QString("%1 s").arg(monitoringInterval));
+    addThreshRow(6, "Release interval",    QString("%1 s").arg(releaseInterval));
 
     infoLayout->addWidget(threshCard);
 
@@ -413,8 +408,6 @@ void SmartRainHarvest::updateInfoPanels()
     // Color depth based on danger level
     if (lastDepth > overflowThreshold)
         depthValueLabel->setStyleSheet("color: #ef5350; background: transparent;");
-    else if (lastDepth > forecastReleaseDepthThreshold)
-        depthValueLabel->setStyleSheet("color: #ffa726; background: transparent;");
     else
         depthValueLabel->setStyleSheet("color: #26c6da; background: transparent;");
 
@@ -428,10 +421,10 @@ void SmartRainHarvest::updateInfoPanels()
 
     // Rain
     rainValueLabel->setText(QString::number(lastCumRain, 'f', 1));
-    int rainPct = qBound(0, static_cast<int>(lastCumRain / (forecastReleaseThreshold * 2) * 100), 100);
+    int rainPct = qBound(0, static_cast<int>(lastCumRain / (forecastThreshold * 2) * 100), 100);
     rainBar->setValue(rainPct);
 
-    if (lastCumRain > forecastReleaseThreshold)
+    if (lastCumRain > forecastThreshold)
         rainValueLabel->setStyleSheet("color: #42a5f5; background: transparent;");
     else
         rainValueLabel->setStyleSheet("color: #eceff1; background: transparent;");
@@ -449,8 +442,10 @@ void SmartRainHarvest::updateModeIndicator()
             modeReasonLabel->setText("Reason: Overflow protection");
         else if (releaseReason == ReleaseReason::Dry)
             modeReasonLabel->setText("Reason: Dry soil");
+        else if (releaseReason == ReleaseReason::Forecast)
+            modeReasonLabel->setText("Reason: Rain forcast");
         else
-            modeReasonLabel->setText("Reason: Rain forecast");
+            modeReasonLabel->setText("Reason: Rain forecast and dry soil");
     } else {
         modeValueLabel->setText("MONITORING");
         modeValueLabel->setStyleSheet("color: #66bb6a; background: transparent;");
@@ -555,7 +550,7 @@ void SmartRainHarvest::enterMonitoringMode()
              << monitoringInterval << "s)";
 }
 
-void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
+void SmartRainHarvest::enterReleaseMode()
 {
     // Only auto-release if auto control is on
     if (!autoControl) {
@@ -563,9 +558,7 @@ void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
         return;
     }
 
-    state         = SystemState::Releasing;
-    releaseReason = reason;
-    releaseTarget = target;
+    state = SystemState::Releasing;
 
     depthChart->setAnimated(false);
     valveChart->setAnimated(false);
@@ -581,12 +574,6 @@ void SmartRainHarvest::enterReleaseMode(ReleaseReason reason, double target)
 
     updateModeIndicator();
     updateValveButton();
-
-    QString reasonStr = (reason == ReleaseReason::Overflow)
-                            ? "OVERFLOW" : "FORECAST";
-    qDebug() << "-> RELEASING mode (" << reasonStr
-             << ") target:" << target << "cm (interval:"
-             << releaseInterval << "s)";
 }
 
 // ================================================================
@@ -602,7 +589,7 @@ void SmartRainHarvest::onMonitoringTick()
     {
         if (checkIfShouldRelease()) // Enter release mode if conditions are met.
         {
-            enterReleaseMode(ReleaseReason::Dry, moistureTargetDepth);
+            enterReleaseMode();
             return;
         }
     }
@@ -623,8 +610,6 @@ void SmartRainHarvest::onReleaseTick()
 
     if (!checkIfShouldRelease()) // Enter monitoring mode if conditions are met.
     {
-        qDebug() << "TARGET REACHED: depth" << lastDepth
-                 << "<" << releaseTarget << " -> shutting valve";
 
         shutValve();
         recordValveState();
@@ -635,8 +620,6 @@ void SmartRainHarvest::onReleaseTick()
     }
     else
     {
-        qDebug() << "DRAINING: depth" << lastDepth
-                 << " target" << releaseTarget;
 
         recordValveState();
         dbWriter.sendValveState(true);
@@ -835,7 +818,7 @@ bool SmartRainHarvest::checkIfShouldRelease()
 
     lastMoisture = measureMoisture();
     recordMoisture(lastMoisture);
-    //dbWriter.sendMoistureReading(lastMoisture);
+    dbWriter.sendMoistureReading(lastMoisture);
 
 
     // 1. Fetch weather
@@ -887,12 +870,26 @@ bool SmartRainHarvest::checkIfShouldRelease()
     }
 
 
-    updateInfoPanels();
 
+
+    releaseReason = ReleaseReason::None;
+
+    if (lastMoisture < moistureThreshold && lastCumRain < forecastThreshold)
+        releaseReason = ReleaseReason::DryAndForecast;
+    else if (lastMoisture < moistureThreshold)
+        releaseReason = ReleaseReason::Dry;
+    else if (lastCumRain < forecastThreshold)
+        releaseReason = ReleaseReason::Forecast;
+    if (lastDepth > overflowThreshold)
+        releaseReason = ReleaseReason::Overflow;
+
+
+    updateInfoPanels();
+    SmartRainHarvest::updateModeIndicator();
 
 
     // Decide state.
-    return (!(lastDepth < emptyThreshold || lastMoisture > moistureThreshold || lastCumRain > forecastReleaseThreshold )
+    return (!(lastDepth < emptyThreshold || lastMoisture > moistureThreshold || lastCumRain > forecastThreshold )
             || lastDepth > overflowThreshold); // Release
 
 }

@@ -36,6 +36,7 @@ public:
 
     // Convenience methods for specific data types
     void sendDepthReading(double depthCm);
+    void sendMoistureReading(double moist);
     void sendValveState(bool open);
 
 private slots:

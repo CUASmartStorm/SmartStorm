@@ -40,7 +40,8 @@ enum class ReleaseReason {
     None,
     Overflow,
     Forecast,
-    Dry
+    Dry,
+    DryAndForecast
 };
 
 class SmartRainHarvest : public QMainWindow
@@ -62,11 +63,8 @@ public:
     //   1. Current water depth  >  forecastReleaseDepthThreshold
     //   2. 2-day cumulative rain >  forecastReleaseThreshold
     // The system then drains down to forecastTargetDepth.
-    double forecastReleaseDepthThreshold = 20;       // cm  — min water level to consider draining
-    double forecastReleaseThreshold      = 15;       // mm  — min predicted rain (2-day sum)
-    double forecastTargetDepth           = 5;        // cm  — drain-to depth in forecast mode
-    double moistureThreshold             = 20;      // %  — minimum soil moisture to consider draining
-    double moistureTargetDepth           = 75;        // cm  — drain-to depth in dry soil
+    double forecastThreshold      = 15;       // mm  — min predicted rain (2-day sum)
+    double moistureThreshold      = 20;      // %  — minimum soil moisture to consider draining
 
     // Overflow protection triggers when:
     //   Current water depth  >  overflowThreshold
@@ -74,7 +72,6 @@ public:
     // The system drains down to overflowTargetDepth.
     double overflowThreshold     = 90;               // cm  — emergency release trigger
     double emptyThreshold     = 10;                 // cm  — point at which the barrel is empty.
-    double overflowTargetDepth   = 75;               // cm  — drain-to depth in overflow mode
     int monitoringInterval  = 1;                    // Interval during closed valve mode (seconds)
     int releaseInterval     = 1;                     // Interval during open valve mode (seconds)
     bool sensorEnabled      = true;
@@ -92,7 +89,6 @@ private:
     ReleaseReason releaseReason = ReleaseReason::None;
     bool          valveOpen     = false;
     bool          autoControl   = true;
-    double        releaseTarget = 0;
     double        lastDepth     = 0;
     double        lastMoisture  = 0;
     double        lastCumRain   = 0;
@@ -120,7 +116,7 @@ private:
 
 
     // ── State transitions ──────────────────────────────────
-    void enterReleaseMode(ReleaseReason reason, double target);
+    void enterReleaseMode();
     void enterMonitoringMode();
 
 
@@ -183,12 +179,9 @@ private:
 
     // ── Threshold labels ───────────────────────────────────
     QLabel *threshOverflowLabel;
-    QLabel *threshForecastDepthLabel;
+    QLabel *threshEmptyLabel;
     QLabel *threshForecastRainLabel;
-    QLabel *threshOverflowTargetLabel;
-    QLabel *threshForecastTargetLabel;
     QLabel *threshmoistureLabel;
-    QLabel *threshMoistureTargetLabel;
 
     // ── Controls ───────────────────────────────────────────
     QPushButton *manualButton;
