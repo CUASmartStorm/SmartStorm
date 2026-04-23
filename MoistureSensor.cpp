@@ -30,6 +30,7 @@ void MoistureSensor::cleanup() {
 
 int MoistureSensor::readChannel(int channel) {
 
+
     unsigned char buf[3];
 
     buf[0] = 0x01;
@@ -79,7 +80,13 @@ double MoistureSensor::getMoisture() {
     //    double moisture = rawToMoisturePercent(raw);
     //}
 
-    int raw = readChannel(7);
+    int raw = 0;
+
+    for (int i = 0; i < 8; i++)
+        raw += readChannel(i);
+
+    raw /= 8;
+
     double moisture = rawToMoisturePercent(raw);
 
     //double moisture = raw;

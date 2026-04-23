@@ -152,7 +152,7 @@ private:
     ChartContainer *weatherChart    = new ChartContainer();
     ChartContainer *cumulativeChart = new ChartContainer();
     ChartContainer *depthChart      = new ChartContainer();
-    ChartContainer *moistureChart      = new ChartContainer();
+    ChartContainer *moistureChart   = new ChartContainer();
     ChartContainer *valveChart      = new ChartContainer();
 
     // ── Info panel labels ──────────────────────────────────
