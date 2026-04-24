@@ -39,7 +39,7 @@ void DatabaseWriter::sendWeatherData(const QString &sensorId, const QString &uni
         sendReading(sensorId, data.value, unit, data.timestamp);
     }
 
-    qDebug() << "Sent" << weatherData.size() << "readings for" << sensorId;
+    //qDebug() << "Sent" << weatherData.size() << "readings for" << sensorId;
 }
 
 // Convenience: send a depth sensor reading with current timestamp

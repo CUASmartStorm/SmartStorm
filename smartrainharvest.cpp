@@ -25,6 +25,9 @@ SmartRainHarvest::SmartRainHarvest(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::SmartRainHarvest)
 {
+
+
+
     ui->setupUi(this);
 
     // Timers
@@ -546,15 +549,15 @@ void SmartRainHarvest::enterMonitoringMode()
 
     updateModeIndicator();
 
-    qDebug() << "-> MONITORING mode (interval:"
-             << monitoringInterval << "s)";
+    //qDebug() << "-> MONITORING mode (interval:"
+    //         << monitoringInterval << "s)";
 }
 
 void SmartRainHarvest::enterReleaseMode()
 {
     // Only auto-release if auto control is on
     if (!autoControl) {
-        qDebug() << "Auto control OFF — skipping release";
+        //qDebug() << "Auto control OFF — skipping release";
         return;
     }
 
@@ -582,7 +585,7 @@ void SmartRainHarvest::enterReleaseMode()
 
 void SmartRainHarvest::onMonitoringTick()
 {
-    qDebug() << "-- Monitoring tick --";
+    //qDebug() << "-- Monitoring tick --";
 
 
     if (autoControl)
@@ -604,7 +607,7 @@ void SmartRainHarvest::onMonitoringTick()
 
 void SmartRainHarvest::onReleaseTick()
 {
-    qDebug() << "-- Release tick --";
+    //qDebug() << "-- Release tick --";
 
 
 
@@ -635,7 +638,7 @@ void SmartRainHarvest::onAutoControlToggled(bool checked)
     autoControl = checked;
 
     if (checked) {
-        qDebug() << "Auto control ENABLED";
+        //qDebug() << "Auto control ENABLED";
 
         // If valve was manually opened, shut it and reset
         if (valveOpen && state != SystemState::Releasing) {
@@ -650,7 +653,7 @@ void SmartRainHarvest::onAutoControlToggled(bool checked)
 
         updateModeIndicator();
     } else {
-        qDebug() << "Auto control DISABLED (manual mode)";
+        //qDebug() << "Auto control DISABLED (manual mode)";
 
         // If currently releasing, stop
         if (state == SystemState::Releasing) {
@@ -727,7 +730,7 @@ double SmartRainHarvest::measureDepth()
     if (depth > barrelDepth) depth = barrelDepth;
     if (depth < 0)           depth = 0;
 
-    qDebug() << "Depth:" << depth << "cm (raw sensor:" << raw << "cm)";
+    //qDebug() << "Depth:" << depth << "cm (raw sensor:" << raw << "cm)";
     return depth;
 }
 
@@ -757,7 +760,7 @@ void SmartRainHarvest::openValve()
    delay(VALVE_PULSE_MS);
    digitalWrite(VALVE_OPEN_PIN, LOW);
 #endif
-    qDebug() << "VALVE OPENED";
+    //qDebug() << "VALVE OPENED";
 
     valveOpen = true;
 }
@@ -773,7 +776,7 @@ void SmartRainHarvest::shutValve()
     delay(VALVE_PULSE_MS);
     //digitalWrite(VALVE_CLOSE_PIN, LOW);
 #endif
-    qDebug() << "VALVE SHUT";
+    //qDebug() << "VALVE SHUT";
 
     valveOpen = false;
 }
@@ -843,8 +846,7 @@ bool SmartRainHarvest::checkIfShouldRelease()
     // 2. Cumulative rain
     lastCumRain = calculateCumulativeValue(rainAmount, 2);
 
-    qDebug() << "Cumulative rain (2-day):" << lastCumRain
-             << "mm from" << rainAmount.size() << "data points";
+    //qDebug() << "Cumulative rain (2-day):" << lastCumRain << "mm from" << rainAmount.size() << "data points";
 
 
 

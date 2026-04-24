@@ -57,7 +57,7 @@ public:
     // Physical distance from the ultrasonic sensor (mounted at top)
     // to the bottom of the barrel. All depth readings are calculated
     // as: depth = barrelDepth − sensorReading
-    double barrelDepth = 100;                        // cm   
+    double barrelDepth = 137.16;                        // cm
 
     // Forecast-based release triggers when BOTH conditions are met:
     //   1. Current water depth  >  forecastReleaseDepthThreshold
@@ -70,10 +70,10 @@ public:
     //   Current water depth  >  overflowThreshold
     // This fires regardless of the rain forecast (safety mechanism).
     // The system drains down to overflowTargetDepth.
-    double overflowThreshold     = 90;               // cm  — emergency release trigger
-    double emptyThreshold     = 10;                 // cm  — point at which the barrel is empty.
-    int monitoringInterval  = 1;                    // Interval during closed valve mode (seconds)
-    int releaseInterval     = 1;                     // Interval during open valve mode (seconds)
+    double overflowThreshold     = 124;               // cm  — emergency release trigger
+    double emptyThreshold     = 13;                 // cm  — point at which the barrel is empty.
+    int monitoringInterval  = 3600;                    // Interval during closed valve mode (seconds)
+    int releaseInterval     = 300;                     // Interval during open valve mode (seconds)
     bool sensorEnabled      = true;
 
 private slots:

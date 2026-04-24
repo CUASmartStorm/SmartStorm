@@ -28,7 +28,7 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(int latitude, int 
     // Construct NOAA API URL for the specified grid coordinates
     QString url;
     url = QString("https://api.weather.gov/gridpoints/LWX/%1,%2").arg(latitude).arg(longitude);
-    qDebug() << url;
+    //qDebug() << url;
 
     // Create HTTP GET request
     QNetworkRequest request((QUrl(url)));
@@ -50,7 +50,7 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(int latitude, int 
         DataType = "temperature";
         break;
     }
-    qDebug() << DataType;
+    //qDebug() << DataType;
 
     // Send the request
     QNetworkReply* reply = manager->get(request);
@@ -66,20 +66,20 @@ QVector<WeatherData> NOAAWeatherFetcher::getWeatherPrediction(int latitude, int 
         QJsonDocument jsonResponse = QJsonDocument::fromJson(response);
         QJsonObject jsonObject = jsonResponse.object();
         QJsonObject properties = jsonObject["properties"].toObject();
-        qDebug() << properties[DataType];
+        //qDebug() << properties[DataType];
 
         // Extract the time series values array
         QJsonArray periods = properties[DataType].toObject()["values"].toArray();
-        qDebug() << periods;
+        //qDebug() << periods;
 
         // Parse each time period's data
         for (const auto& period : periods) {
             QJsonObject obj = period.toObject();
 
             // Extract timestamp and value
-            qDebug() << obj["validTime"].toString().split("+")[0];
+            //qDebug() << obj["validTime"].toString().split("+")[0];
             QDateTime time = QDateTime::fromString(obj["validTime"].toString().split("+")[0], "yyyy-MM-ddTHH:mm:ss");
-            qDebug() << time;
+            //qDebug() << time;
             double value = obj["value"].toDouble();
 
             weatherData.push_back({ time, value });
