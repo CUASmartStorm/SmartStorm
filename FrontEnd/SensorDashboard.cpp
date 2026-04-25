@@ -16,7 +16,8 @@ SensorDashboard::SensorDashboard(QWidget *parent)
         "precip_prob",
         "temperature",
         "water_depth",
-        "valve_state"
+        "valve_state",
+        "moisture_sensor"
     };
 
     // Auto-refresh timer (60 s)
@@ -551,6 +552,7 @@ QString SensorDashboard::friendlyName(const QString &sensorId)
     if (sensorId == "temperature")    return "Temperature";
     if (sensorId == "water_depth")    return "Water Depth";
     if (sensorId == "valve_state")    return "Valve State";
+    if (sensorId == "moisture_sensor") return "Soil Moisture";
     QString name = sensorId;
     name.replace('_', ' ');
     if (!name.isEmpty()) name[0] = name[0].toUpper();
@@ -564,6 +566,7 @@ QString SensorDashboard::unitLabel(const QString &sensorId)
     if (sensorId == "temperature")    return "°C";
     if (sensorId == "water_depth")    return "cm";
     if (sensorId == "valve_state")    return "0 / 1";
+    if (sensorId == "moisture_sensor") return "%";
     return "Value";
 }
 
@@ -574,6 +577,7 @@ QColor SensorDashboard::seriesColor(const QString &sensorId)
     if (sensorId == "temperature")    return QColor("#ef5350"); // red
     if (sensorId == "water_depth")    return QColor("#26c6da"); // cyan
     if (sensorId == "valve_state")    return QColor("#66bb6a"); // green
+    if (sensorId == "moisture_sensor") return QColor("#8d6e63"); // brown
     return QColor("#78909c");
 }
 
@@ -585,6 +589,7 @@ QColor SensorDashboard::areaColor(const QString &sensorId)
     if (sensorId == "temperature")    return QColor(239,83,80,  40);
     if (sensorId == "water_depth")    return QColor(38,198,218,  40);
     if (sensorId == "valve_state")    return QColor(102,187,106, 40);
+    if (sensorId == "moisture_sensor") return QColor(141,110,99, 45);
     return QColor(120,144,156, 30);
 }
 
@@ -593,5 +598,6 @@ bool SensorDashboard::floorAtZero(const QString &sensorId)
     // These sensors should always start Y axis at 0
     return (sensorId == "precip_amount" ||
             sensorId == "precip_prob"   ||
-            sensorId == "valve_state");
+            sensorId == "valve_state"   ||
+            sensorId == "moisture_sensor");
 }
